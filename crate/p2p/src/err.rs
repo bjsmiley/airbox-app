@@ -1,9 +1,5 @@
 use thiserror::Error;
 
-use crate::proto;
-
-
-
 /// Errors while initializing P2p
 #[derive(Debug, Error)]
 pub enum InitError {
@@ -57,7 +53,7 @@ pub enum HandshakeError {
 }
 
 impl From<ring::error::Unspecified> for HandshakeError {
-    fn from(value: ring::error::Unspecified) -> Self {
+    fn from(_: ring::error::Unspecified) -> Self {
         HandshakeError::Auth
     }
 }
@@ -83,7 +79,7 @@ pub enum ParseError {
 
     /// The packet had an unexpected message type
     #[error("The unexpected message type {0:?} was found")]
-    MsgType(proto::MessageType),
+    MsgType(crate::proto::MessageType),
 
     /// There was a problem performing an I/O operation
     #[error("The I/O operation failed")]
