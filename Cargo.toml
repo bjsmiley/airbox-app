@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/p2p"
+]
+
+[workspace.dependencies]
+tokio = "1.25.0"

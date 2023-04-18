@@ -1,0 +1,27 @@
+[package]
+name = "ab-p2p"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures-util = "0.3.26"
+thiserror = "1.0.38"
+tracing = "0.1.37"
+tokio = { workspace = true, features = ["macros", "sync", "net", "rt", "time", "io-util"] }
+serde = { version = "1.0.152", features = ["derive"] }
+ring = "0.16.20"
+num_enum = "0.5.10"
+dashmap = "5.4.0"
+bip39 = { version = "1.0.1", features = ["rand"] }
+totp-rs = { version = "4.2.0", features = ["qr"] }
+rcgen = "0.10.0"
+rustls = "0.20.8"
+tokio-util = { version = "0.7.7", features = ["net", "codec"] }
+bytes = "1.4.0"
+futures = "0.3.28"
+hex-literal = "0.4.1"
+byteorder = "1.4.3"
+tracing-subscriber = "0.3.16"
+socket2 = "0.5.2"
