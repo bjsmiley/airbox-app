@@ -1,37 +1,20 @@
 use std::{sync::Arc, time::Duration};
 
 use futures::{SinkExt, StreamExt};
-use thiserror::Error;
 use tokio::{net::TcpStream, time::timeout};
 use tokio_util::codec::Framed;
 use tracing::{debug, error};
 
-use crate::{peer::{Peer, PeerCandidate}, proto::{ConnectCodec, Connect}, crypto::{hmac_encrypt, hmac_verify}, pairing::PairingAuthenticator, manager::P2pManager};
+use crate::{err, peer::{Peer, PeerCandidate}, proto::{ConnectCodec, Connect}, crypto::{hmac_encrypt, hmac_verify}, pairing::PairingAuthenticator, manager::P2pManager};
 
 const TIMEOUT_ERR: u32 = 2001;
 const NOT_FOUND_ERR: u32 = 2002;
 const AUTH_ERR: u32 = 2003;
 
-#[derive(Debug,Error)]
-pub enum ConnectHandshakeError {
-    #[error("There was a network related error connecting")]
-    Net(#[from] crate::proto::ConnectError),
-    #[error("There was an unsepcified error connecting")]
-    Unspecified(u32),
-    #[error("The peer timed out")]
-    Timeout,
-    #[error("The peer closed the connection")]
-    ConnectionClosed,
-    #[error("There was an auth error")]
-    Auth(ring::error::Unspecified),
-    #[error("The peer received a malformed message")]
-    InvalidMessage,
-    #[error("The peer was not found")]
-    PeerNotFound
-}
+
 
 /// handshake as the client to attempt to connect as a connected peer
-pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &PeerCandidate) -> Result<Peer, ConnectHandshakeError> {
+pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &PeerCandidate) -> Result<Peer, err::HandshakeError> {
     // get auth ready
     let auth = PairingAuthenticator::new(peer.auth_secret.clone().into_bytes()).unwrap();
     let code = auth.generate().unwrap();
@@ -44,12 +27,12 @@ pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &P
     let Ok(response) = timeout(Duration::from_secs(1), frame.next()).await else {
         error!("peer timed out waiting for ConnectResponse");
         frame.send(crate::proto::Connect::ConnectionFailure(TIMEOUT_ERR)).await;
-        return Err(ConnectHandshakeError::Timeout);
+        return Err(err::HandshakeError::Timeout);
     };
     match response {
         None => {
             error!("peer closed the connection");
-            return Err(ConnectHandshakeError::ConnectionClosed);
+            return Err(err::HandshakeError::Disconnect);
         }
         Some(res) => {
             match res? {
@@ -58,13 +41,13 @@ pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &P
                     if let Err(e) = hmac_verify(key, peer.id.as_bytes(), &tag){
                         error!("Error verifying totp hmac: {:?}", e);
                         frame.send(crate::proto::Connect::ConnectionFailure(AUTH_ERR)).await;
-                        return Err(ConnectHandshakeError::Auth(e));
+                        return Err(err::HandshakeError::Auth);
                     }
                     frame.send(Connect::ConnectionCompleteRequest).await?;
                     let Ok(complete) = timeout(Duration::from_secs(1), frame.next()).await else {
                         error!("peer timed out waiting for ConnectionCompleteResponse");
                         frame.send(crate::proto::Connect::ConnectionFailure(TIMEOUT_ERR)).await;
-                        return Err(ConnectHandshakeError::Timeout);
+                        return Err(err::HandshakeError::Timeout);
                     };
                     match complete {
                         Some(res) => {
@@ -78,23 +61,23 @@ pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &P
                                 }
                                 _ => {
                                     error!("peer recieved the wrong message instead of ConnectionCompleteResponse");
-                                    return Err(ConnectHandshakeError::InvalidMessage);
+                                    return Err(err::HandshakeError::Msg);
                                 }
                             }
                         },
                         None => {
                             error!("peer closed the connection");
-                            return Err(ConnectHandshakeError::ConnectionClosed);
+                            return Err(err::HandshakeError::Disconnect);
                         },
                     }
                 },
                 Connect::ConnectionFailure(code) => {
                     error!("received error {} instead of ConnectionResponse", code);
-                    return Err(ConnectHandshakeError::Unspecified(code));
+                    return Err(err::HandshakeError::Failure(code));
                 }
                 _ => {
                     error!("peer recieved the wrong message instead of ConnectionResponse");
-                    return Err(ConnectHandshakeError::InvalidMessage);
+                    return Err(err::HandshakeError::Msg);
                 }
             }
         }
@@ -102,7 +85,7 @@ pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &P
 }
 
 /// handshake as the host to accept an incoming tcp connection as a connected peer
-pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result<Peer,ConnectHandshakeError> {
+pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result<Peer,err::HandshakeError> {
 
     // get auth ready
 
@@ -113,12 +96,12 @@ pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result
     let Ok(request) = timeout(Duration::from_secs(1), frame.next()).await else {
         error!("peer timed out waiting for ConnectionRequest");
         frame.send(crate::proto::Connect::ConnectionFailure(TIMEOUT_ERR)).await;
-        return Err(ConnectHandshakeError::Timeout);
+        return Err(err::HandshakeError::Timeout);
     };
     match request {
         None => {
             error!("peer closed the connection");
-            return Err(ConnectHandshakeError::ConnectionClosed);
+            return Err(err::HandshakeError::Disconnect);
         },
         Some(req) => {
             match req? {
@@ -126,7 +109,7 @@ pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result
                     let Some(peer) = manager.get_peer_candidate(&id) else {
                         frame.send(crate::proto::Connect::ConnectionFailure(NOT_FOUND_ERR)).await;
                         error!("peer is not known nor discovered");
-                        return Err(ConnectHandshakeError::PeerNotFound);
+                        return Err(err::HandshakeError::NotFound);
                     };
                     debug!("validating peer's totp code");
                     let auth = PairingAuthenticator::new(peer.auth_secret.into_bytes()).unwrap();
@@ -135,7 +118,7 @@ pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result
                     if let Err(e) = hmac_verify(key, peer.id.as_bytes(), &tag){
                         error!("Error verifying totp hmac: {:?}", e);
                         frame.send(crate::proto::Connect::ConnectionFailure(AUTH_ERR)).await;
-                        return Err(ConnectHandshakeError::Auth(e));
+                        return Err(err::HandshakeError::Auth);
                     }
                     let encrpyted_id = hmac_encrypt(key, manager.id.as_bytes());
                     frame.send(crate::proto::Connect::ConnectionResponse(encrpyted_id.as_ref().to_vec())).await?;
@@ -143,7 +126,7 @@ pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result
                     let Ok(complete) = timeout(Duration::from_secs(1), frame.next()).await else {
                         error!("peer timed out waiting for ConnectionCompleteRequest");
                         frame.send(crate::proto::Connect::ConnectionFailure(TIMEOUT_ERR)).await;
-                        return Err(ConnectHandshakeError::Timeout);
+                        return Err(err::HandshakeError::Timeout);
                     };
                     match complete {
                         Some(res) => {
@@ -157,23 +140,23 @@ pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result
                                 }
                                 _ => {
                                     error!("peer recieved the wrong message instead of ConnectionCompleteRequest");
-                                    return Err(ConnectHandshakeError::InvalidMessage);
+                                    return Err(err::HandshakeError::Msg);
                                 }
                             }
                         }
                         None => {
                             error!("peer closed the connection");
-                            return Err(ConnectHandshakeError::ConnectionClosed);
+                            return Err(err::HandshakeError::Disconnect);
                         },
                     }
                 },
                 Connect::ConnectionFailure(code) => {
                     error!("received error {} instead of ConnectionRequest", code);
-                    return Err(ConnectHandshakeError::Unspecified(code));
+                    return Err(err::HandshakeError::Failure(code));
                 },
                 _ => {
                     error!("peer recieved the wrong message instead of ConnectionRequest");
-                    return Err(ConnectHandshakeError::InvalidMessage);
+                    return Err(err::HandshakeError::Msg);
                 }
             }
         }

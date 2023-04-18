@@ -1,29 +1,22 @@
-use std::{sync::Arc, net::{SocketAddr, SocketAddrV4, Ipv4Addr}, fmt::Display};
-use thiserror::Error;
+use std::{net::{SocketAddr, SocketAddrV4, Ipv4Addr}};
 use tokio::{sync::mpsc, net::UdpSocket};
 use tokio_util::udp::UdpFramed;
 use futures::{StreamExt, SinkExt};
 use tracing::{error,debug};
 
-use crate::{peer::PeerMetadata, proto::DiscoveryCodec};
+use crate::{err, peer::PeerMetadata, proto::DiscoveryCodec};
 
 pub static DISCOVERY_MULTICAST: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 98);
 
 
-#[derive(Debug, Error)]
-pub enum CreateSocketError {
-     #[error("IO error")]
-     TokioIO(#[from] tokio::io::Error),
-    // #[error("IO error")]
-    //IO(#[from] std::io::Error)
-}
+
 
 /*
     let addr = Ipv4Addr::UNSPECIFIED;
     let multi_addr: Ipv4Addr = "239.255.42.98".parse()?;
     let port = 50692;
  */
-pub fn create_duplex_multicast_socket(addr: &Ipv4Addr, addr_port: u16, multi_addr: &Ipv4Addr, multi_port: u16) -> Result<(UdpSocket, SocketAddr),CreateSocketError> {
+pub fn create_duplex_multicast_socket(addr: &Ipv4Addr, addr_port: u16, multi_addr: &Ipv4Addr, multi_port: u16) -> Result<(UdpSocket, SocketAddr), std::io::Error> {
     
     use socket2::{Domain, Type, Protocol, Socket};
 

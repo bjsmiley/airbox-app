@@ -1,11 +1,10 @@
-use std::{sync::Arc, net::{SocketAddr, SocketAddrV4, Ipv4Addr, IpAddr}, collections::HashSet};
+use std::{sync::Arc, net::{SocketAddr, Ipv4Addr}, collections::HashSet};
 
 use dashmap::{DashMap, DashSet};
-use thiserror::Error;
-use tokio::{sync::mpsc, net::{UdpSocket, TcpListener, TcpStream}};
+use tokio::{sync::mpsc, net::{TcpListener, TcpStream}};
 use tracing::{debug, error};
 
-use crate::{peer::{PeerId, PeerMetadata, PeerCandidate, Peer, DeviceType, PeerIdError}, discovery::{DiscoveryEvent, discovery, self, create_duplex_multicast_socket}, event_loop::p2p_event_loop};
+use crate::{err, peer::{PeerId, PeerMetadata, PeerCandidate, Peer, DeviceType}, discovery::{DiscoveryEvent, discovery, create_duplex_multicast_socket}, event_loop::p2p_event_loop};
 
 pub struct P2pManager {
 
@@ -42,7 +41,7 @@ pub struct P2pManager {
 }
 
 impl P2pManager {
-    pub async fn new(config: P2pConfig) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AppEvent>), P2pError> {
+    pub async fn new(config: P2pConfig) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AppEvent>), err::InitError> {
         
         // let peer_id = PeerId::from_string(config.id.clone())?;
         
@@ -155,10 +154,10 @@ impl P2pManager {
     }
 
     /// application calls this to connect to a peer
-    pub async fn connect_to_peer(self: &Arc<Self>, id: &PeerId) -> Result<Peer,P2pClientConnectError> {
-        if self.connected_peers.contains(id) { return Err(P2pClientConnectError::AlreadyConnected); }
+    pub async fn connect_to_peer(self: &Arc<Self>, id: &PeerId) -> Result<Peer,err::HandshakeError> {
+        if self.connected_peers.contains(id) { return Err(err::HandshakeError::Dup); }
         let Some(candidate) = self.discovered_peers.get(id) else {
-            return Err(P2pClientConnectError::NotFound)
+            return Err(err::HandshakeError::NotFound)
         };
 
         // let peer = candidate.clone();
@@ -176,7 +175,7 @@ impl P2pManager {
                 }
             }
         }
-        Err(P2pClientConnectError::Address)
+        Err(err::HandshakeError::Addr)
 
 
     }
@@ -277,28 +276,28 @@ pub struct P2pConfig {
     pub p2p_addr: SocketAddr,
 }
 
-#[derive(Debug, Error)]
-pub enum P2pError {
-    #[error("Invalid Peer Id")]
-    InvalidPeerId(#[from] PeerIdError),
-    #[error("The address for discovery is not a multicast address")]
-    InvalidMulticastAddr,
-    #[error("Could not start discovery")]
-    Discovery(#[from] discovery::CreateSocketError),
-    #[error("Tokio io error")]
-    Tokio(#[from] tokio::io::Error)
-}
+// #[derive(Debug, Error)]
+// pub enum P2pError {
+//     #[error("Invalid Peer Id")]
+//     InvalidPeerId(#[from] PeerIdError),
+//     #[error("The address for discovery is not a multicast address")]
+//     InvalidMulticastAddr,
+//     #[error("Could not start discovery")]
+//     Discovery(#[from] discovery::CreateSocketError),
+//     #[error("Tokio io error")]
+//     Tokio(#[from] tokio::io::Error)
+// }
 
-/// P2p errors as the client trying to connect
-#[derive(Debug, Error)]
-pub enum P2pClientConnectError {
-    #[error("Peer already connected")]
-    AlreadyConnected,
-    #[error("Peer not found")]
-    NotFound,
-    #[error("Peer has no connectable addresses")]
-    Address,
-    #[error("A handshake error occured")]
-    Handshake(#[from] crate::net::ConnectHandshakeError)
+// P2p errors as the client trying to connect
+// #[derive(Debug, Error)]
+// pub enum P2pClientConnectError {
+//     #[error("Peer already connected")]
+//     AlreadyConnected,
+//     #[error("Peer not found")]
+//     NotFound,
+//     #[error("Peer has no connectable addresses")]
+//     Address,
+//     #[error("A handshake error occured")]
+//     Handshake(#[from] crate::net::ConnectHandshakeError)
 
-}
+// }

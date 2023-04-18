@@ -7,5 +7,6 @@ mod event_loop;
 mod utils;
 mod crypto;
 mod net;
+mod err;
 
 

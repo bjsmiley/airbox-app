@@ -8,7 +8,8 @@ use tokio_util::codec::{Encoder, Decoder};
 use byteorder::{ReadBytesExt, BigEndian};
 
 
-use crate::{discovery::{DiscoveryEvent}, peer::{PeerMetadata, DeviceType, PeerId, PeerIdError}};
+use crate::{discovery::{DiscoveryEvent}, peer::{PeerMetadata, DeviceType, PeerId}};
+use crate::err;
 
 
 pub(crate) const SIGNATURE: [u8; 2] = hex_literal::hex!("4040");
@@ -23,31 +24,10 @@ pub(crate) const SIGNATURE: [u8; 2] = hex_literal::hex!("4040");
 
 pub struct DiscoveryCodec;
 
-#[derive(Error, Debug)]
-pub enum DiscoveryError {
-    #[error("Not a valid Discovery Packet")]
-    NotADiscoveryPacket,
-    #[error("Not a valid Header")]
-    HeaderError(#[from] HeaderError),
-    #[error("Invalid device type")]
-    InvalidDeviceType(u16),
-    #[error("Invalid device address")]
-    InvalidDeviceAddress(String),
-    #[error("Invalid device id")]
-    InvalidDeviceId(#[from] PeerIdError),
-    // #[error("Invalid message flags")]
-    // InvalidMessageFlags(u16),
-    // #[error("Invalid next header")]
-    // InvalidNextHeader(u8),
-    #[error("Invalid discovery type")]
-    InvalidDiscoveryType(u8),
-    #[error("IO operation failed")]
-    IO(#[from] std::io::Error)
-}
 
 impl Decoder for DiscoveryCodec {
     type Item = DiscoveryEvent;
-    type Error = DiscoveryError;
+    type Error = err::ParseError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let Some(header) = HeaderCodec.decode(src)? else {
@@ -55,7 +35,7 @@ impl Decoder for DiscoveryCodec {
         };
 
         if header.message_type != MessageType::Discovery {
-            return Err(DiscoveryError::NotADiscoveryPacket);
+            return Err(Self::Error::MsgType(header.message_type));
         }
 
         match src.get_u8() {
@@ -72,8 +52,8 @@ impl Decoder for DiscoveryCodec {
                 let device_addr_length = src.get_u16();
                 let device_addr_bytes = src.split_to(device_addr_length.into());
                 let device_addr_str = String::from_utf8(device_addr_bytes.to_vec()).unwrap();
-                let device_addr: SocketAddr = device_addr_str.parse().map_err(|_| DiscoveryError::InvalidDeviceAddress(device_addr_str))?;
-                let device_type = DeviceType::try_from_primitive(device_type_raw).map_err(|_| DiscoveryError::InvalidDeviceType(device_type_raw))?;
+                let device_addr: SocketAddr = device_addr_str.parse()?;
+                let device_type = DeviceType::try_from_primitive(device_type_raw)?;
                 
                 Ok(Some(DiscoveryEvent::PresenceResponse(PeerMetadata {
                     typ: device_type,
@@ -82,14 +62,14 @@ impl Decoder for DiscoveryCodec {
                     addr: device_addr
                 })))
             },
-            x => Err(DiscoveryError::InvalidDiscoveryType(x))
+            x => Err(Self::Error::Enum(x.into()))
         }
         
     }
 }
 
 impl Encoder<DiscoveryEvent> for DiscoveryCodec {
-    type Error = DiscoveryError;
+    type Error = err::ParseError;
 
     fn encode(&mut self, item: DiscoveryEvent, dst: &mut BytesMut) -> Result<(), Self::Error> {        
         
@@ -135,22 +115,12 @@ impl Frame for Connect {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum ConnectError {
-    #[error("IO operation failed")]
-    IO(#[from] std::io::Error),
-    #[error("Not a valid Header")]
-    HeaderError(#[from] HeaderError),
-    #[error("Not a Connect type packet")]
-    NotAConnectPacket,
-    #[error("Invalid discovery type")]
-    InvalidConnectType(u8),
-}
+
 
 impl Decoder for ConnectCodec {
     type Item = Connect;
 
-    type Error = ConnectError;
+    type Error = err::ParseError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let Some(header) = HeaderCodec.decode(src)? else {
@@ -158,7 +128,7 @@ impl Decoder for ConnectCodec {
         };
 
         if header.message_type != MessageType::Connect {
-            return Err(ConnectError::NotAConnectPacket);
+            return Err(Self::Error::MsgType(header.message_type));
         }
 
         match src.get_u8() {
@@ -182,14 +152,14 @@ impl Decoder for ConnectCodec {
                 Ok(Some(Connect::ConnectionFailure(src.get_u32())))
             },
             x => {
-                Err(ConnectError::InvalidConnectType(x))
+                Err(Self::Error::Enum(x.into()))
             }
         }
     }
 }
 
 impl Encoder<Connect> for ConnectCodec {
-    type Error = ConnectError;
+    type Error = err::ParseError;
 
     fn encode(&mut self, item: Connect, dst: &mut BytesMut) -> Result<(), Self::Error> {
         HeaderCodec.encode(Header::new(MessageType::Connect, &item), dst)?;
@@ -220,22 +190,14 @@ impl Encoder<Connect> for ConnectCodec {
 
 
 
-#[derive(Error, Debug)]
-pub enum HeaderError {
-    #[error("Not a valid Header")]
-    NotAHeader,
-    #[error("Invalid Message Type")]
-    InvalidMessageType(u8),
-    #[error("IO operation failed")]
-    IO(#[from] std::io::Error)
-}
+
 
 pub struct HeaderCodec;
 
 impl Decoder for HeaderCodec {
     type Item = Header;
 
-    type Error = HeaderError;
+    type Error = err::ParseError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if src.len() < 5 {
@@ -256,7 +218,7 @@ impl Decoder for HeaderCodec {
             return Ok(None)
         };
         if signature_raw != SIGNATURE {
-            return Err(HeaderError::NotAHeader);
+            return Err(Self::Error::NotAPacket);
         }
 
         // if signature_raw != SIGNATURE {
@@ -276,7 +238,7 @@ impl Decoder for HeaderCodec {
         }
         src.advance(4);
         let message_type_raw = src.get_u8();
-        let message_type = MessageType::try_from_primitive(message_type_raw).map_err(|_| HeaderError::InvalidMessageType(message_type_raw))?;
+        let message_type = MessageType::try_from_primitive(message_type_raw)?;
 
         Ok(Some(Header { 
             length: message_length, 
@@ -287,7 +249,7 @@ impl Decoder for HeaderCodec {
 }
 
 impl Encoder<Header> for HeaderCodec {
-    type Error = HeaderError;
+    type Error = err::ParseError;
 
     fn encode(&mut self, item: Header, dst: &mut BytesMut) -> Result<(), Self::Error> {
         dst.put(&SIGNATURE[..]); // signature
@@ -339,15 +301,12 @@ pub trait Frame {
 
 #[cfg(test)]
 mod tests {
+
     use std::{net::{SocketAddr, SocketAddrV4, Ipv4Addr}, fmt::Debug};
-
     use bytes::{BytesMut, BufMut};
-    use hex_literal::hex;
     use tokio_util::codec::{Decoder, Encoder};
-
     use crate::{discovery::DiscoveryEvent, peer::{PeerMetadata, PeerId}, proto::{ConnectCodec, Connect}};
-
-    use super::{DiscoveryCodec, SIGNATURE, DiscoveryError};
+    use super::{DiscoveryCodec, SIGNATURE};
 
 
     fn consume<D>(decoder: &mut D, src: &mut BytesMut) -> Vec<Option<D::Item>>
