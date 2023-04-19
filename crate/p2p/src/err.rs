@@ -54,7 +54,7 @@ pub enum HandshakeError {
 
 impl From<ring::error::Unspecified> for HandshakeError {
     fn from(_: ring::error::Unspecified) -> Self {
-        HandshakeError::Auth
+        Self::Auth
     }
 }
 
@@ -101,5 +101,32 @@ pub enum ParseError {
 impl<T> From<num_enum::TryFromPrimitiveError<T>> for ParseError where T: num_enum::TryFromPrimitive, T::Primitive: Into<usize> {
     fn from(value: num_enum::TryFromPrimitiveError<T>) -> Self {
         ParseError::Enum(value.number.into())
+    }
+}
+
+/// Errors when pairing devices
+#[derive(Error, Debug)]
+pub enum PairingError {
+
+    /// A general totp error
+    #[error("Error initializing Totp")]
+    Totp(#[from] totp_rs::TotpUrlError),
+
+    /// Failure to create a qr code
+    #[error("Error generating QR code: {0}")]
+    QrCode(String),
+
+    /// An invalid secret was used
+    #[error("Error parsing secret")]
+    Secret(String),
+
+    /// The current system time could not be read
+    #[error("Errors checking system time")]
+    Time(#[from] std::time::SystemTimeError)
+}
+
+impl From<String> for PairingError {
+    fn from(value: String) -> Self {
+        Self::QrCode(value)
     }
 }

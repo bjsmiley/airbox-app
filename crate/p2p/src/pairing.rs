@@ -1,7 +1,8 @@
-use std::{str::FromStr, time::SystemTimeError};
+use std::{str::FromStr};
 
-use thiserror::Error;
-use totp_rs::{TotpUrlError, TOTP, Secret};
+use totp_rs::{TOTP, Secret};
+
+use crate::err;
 
 
 pub struct Png(String);
@@ -12,7 +13,7 @@ pub struct PairingAuthenticator {
 }
 
 impl PairingAuthenticator {
-    pub fn new(secret: Vec<u8>) -> Result<Self, PairingError> {
+    pub fn new(secret: Vec<u8>) -> Result<Self, err::PairingError> {
         Ok(Self { 
             totp: TOTP::new(
                 totp_rs::Algorithm::SHA256,
@@ -24,20 +25,20 @@ impl PairingAuthenticator {
                 "airbox-client".to_string())?})
     }
 
-    pub fn from_url<S: AsRef<str>>(url: S) -> Result<Self, PairingError> {
+    pub fn from_url<S: AsRef<str>>(url: S) -> Result<Self, err::PairingError> {
         Ok(Self { totp: TOTP::from_url(url)? })
     }
 
-    pub fn to_qr_code(&self) -> Result<Png, PairingError> {
-        let png = self.totp.get_qr().map_err(|e| PairingError::QrCode(e))?;
+    pub fn to_qr_code(&self) -> Result<Png, err::PairingError> {
+        let png = self.totp.get_qr().map_err(|e| err::PairingError::QrCode(e))?;
         Ok(Png(png))
     }
 
-    pub fn check(&self, token: &str) -> Result<bool, PairingError> {
+    pub fn check(&self, token: &str) -> Result<bool, err::PairingError> {
         Ok(self.totp.check_current(token)?)
     }
 
-    pub fn generate(&self) -> Result<String, PairingError> {
+    pub fn generate(&self) -> Result<String, err::PairingError> {
         Ok(self.totp.generate_current()?)
     }
 }
@@ -49,24 +50,10 @@ impl ToString for PairingAuthenticator {
 }
 
 impl FromStr for PairingAuthenticator {
-    type Err = PairingError;
+    type Err = err::PairingError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let secret_b32 = Secret::Encoded(String::from(s));
-        Self::new(secret_b32.to_bytes().map_err(|e| PairingError::Secret(format!("{:?}", e)))?)
+        Self::new(secret_b32.to_bytes().map_err(|e| Self::Err::Secret(format!("{:?}", e)))?)
     }
-}
-
-
-
-#[derive(Error, Debug)]
-pub enum PairingError {
-    #[error("Error initializing Totp")]
-    Totp(#[from] TotpUrlError),
-    #[error("Error generating QR code")]
-    QrCode(String),
-    #[error("Error parsing secret")]
-    Secret(String),
-    #[error("Errors checking system time")]
-    CheckError(#[from] SystemTimeError)
 }
