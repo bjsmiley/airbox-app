@@ -17,7 +17,7 @@ mod tests {
 
     #[test]
     fn hmac_peer_id_auth_code() -> Result<(), Box<dyn std::error::Error>> {
-        let secret = String::from("SuperSecureSecret");
+        let secret = String::from("QWERTYUIOPQWERTYUIOPQWERTYUIOPQWERTYUIOP");
         let id = String::from("0123456789012345678901234567890123456789");
         let pid = crate::peer::PeerId::from_string(id)?;
         let peer = pid.as_bytes();
