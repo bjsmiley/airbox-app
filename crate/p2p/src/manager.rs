@@ -4,7 +4,7 @@ use dashmap::{DashMap, DashSet};
 use tokio::{sync::mpsc, net::{TcpListener, TcpStream}};
 use tracing::{debug, error};
 
-use crate::{err, peer::{PeerId, PeerMetadata, PeerCandidate, Peer, DeviceType}, discovery::{discovery, create_duplex_multicast_socket}, event_loop::p2p_event_loop, event::*};
+use crate::{err, peer::{PeerId, PeerMetadata, PeerCandidate, Peer, DeviceType}, discovery, event_loop::p2p_event_loop, event::*};
 
 pub struct P2pManager {
 
@@ -79,14 +79,14 @@ impl P2pManager {
 
         let discover = {
             // let (socket, multi_addr) = create_duplex_multicast_socket(&Ipv4Addr::UNSPECIFIED,
-                let (socket, multi_addr) = create_duplex_multicast_socket(
+                let (socket, multi_addr) = discovery::multicast(
                     // &"192.168.88.231".parse().unwrap(),
                     &"127.0.0.1".parse().unwrap(),
 
                     config.addr_port,
                  &config.discovery_addr, 
                  config.discovery_port)?;
-            discovery(socket, multi_addr)
+            discovery::start(socket, multi_addr)
         };
 
         // setup tcp listener

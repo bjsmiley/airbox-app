@@ -5,7 +5,7 @@ use tokio::{net::TcpStream, time::timeout};
 use tokio_util::codec::Framed;
 use tracing::{debug, error};
 
-use crate::{err, peer::{Peer, PeerCandidate}, proto::{ConnectCodec, Connect}, crypto::{hmac_encrypt, hmac_verify}, pairing::PairingAuthenticator, manager::P2pManager};
+use crate::{err, peer::{Peer, PeerCandidate}, proto::{ConnectCodec, Connect}, hmac, pairing::PairingAuthenticator, manager::P2pManager};
 
 const TIMEOUT_ERR: u32 = 2001;
 const NOT_FOUND_ERR: u32 = 2002;
@@ -21,7 +21,7 @@ pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &P
     let key = code.as_bytes();
     let mut frame = Framed::new(conn, ConnectCodec);
     
-    let encrypted_id = hmac_encrypt(key, manager.id.as_bytes());
+    let encrypted_id = hmac::sign(key, manager.id.as_bytes());
     frame.send(Connect::ConnectRequest{ id: manager.id.clone(), tag: encrypted_id.as_ref().to_vec()}).await?;
 
     let Ok(response) = timeout(Duration::from_secs(1), frame.next()).await else {
@@ -38,7 +38,7 @@ pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &P
             match res? {
                 Connect::ConnectionResponse(tag) => {
                     debug!("validating peer's totp code");
-                    if let Err(e) = hmac_verify(key, peer.id.as_bytes(), &tag){
+                    if let Err(e) = hmac::verify(key, peer.id.as_bytes(), &tag){
                         error!("Error verifying totp hmac: {:?}", e);
                         frame.send(crate::proto::Connect::ConnectionFailure(AUTH_ERR)).await;
                         return Err(err::HandshakeError::Auth);
@@ -115,12 +115,12 @@ pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result
                     let auth = PairingAuthenticator::new(peer.auth_secret.into_bytes()).unwrap();
                     let code = auth.generate().unwrap();
                     let key = code.as_bytes();
-                    if let Err(e) = hmac_verify(key, peer.id.as_bytes(), &tag){
+                    if let Err(e) = hmac::verify(key, peer.id.as_bytes(), &tag){
                         error!("Error verifying totp hmac: {:?}", e);
                         frame.send(crate::proto::Connect::ConnectionFailure(AUTH_ERR)).await;
                         return Err(err::HandshakeError::Auth);
                     }
-                    let encrpyted_id = hmac_encrypt(key, manager.id.as_bytes());
+                    let encrpyted_id = hmac::sign(key, manager.id.as_bytes());
                     frame.send(crate::proto::Connect::ConnectionResponse(encrpyted_id.as_ref().to_vec())).await?;
 
                     let Ok(complete) = timeout(Duration::from_secs(1), frame.next()).await else {

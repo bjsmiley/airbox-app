@@ -16,7 +16,7 @@ pub static DISCOVERY_MULTICAST: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 98);
     let multi_addr: Ipv4Addr = "239.255.42.98".parse()?;
     let port = 50692;
  */
-pub fn create_duplex_multicast_socket(addr: &Ipv4Addr, addr_port: u16, multi_addr: &Ipv4Addr, multi_port: u16) -> Result<(UdpSocket, SocketAddr), std::io::Error> {
+pub fn multicast(addr: &Ipv4Addr, addr_port: u16, multi_addr: &Ipv4Addr, multi_port: u16) -> Result<(UdpSocket, SocketAddr), std::io::Error> {
     
     use socket2::{Domain, Type, Protocol, Socket};
 
@@ -44,7 +44,7 @@ pub fn create_duplex_multicast_socket(addr: &Ipv4Addr, addr_port: u16, multi_add
 }
 
 
-pub fn discovery(sock: UdpSocket, addr: SocketAddr) -> (mpsc::Sender<DiscoveryEvent>, mpsc::Receiver<(DiscoveryEvent, SocketAddr)>) {
+pub fn start(sock: UdpSocket, addr: SocketAddr) -> (mpsc::Sender<DiscoveryEvent>, mpsc::Receiver<(DiscoveryEvent, SocketAddr)>) {
 
     let (app_tx, mut app_rx) = mpsc::channel(1024);
     let (transport_tx, transport_rx) = mpsc::channel::<(DiscoveryEvent, SocketAddr)>(1024);
