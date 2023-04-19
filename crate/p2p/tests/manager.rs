@@ -1,6 +1,6 @@
 use std::{time::Duration, error::Error};
 
-use ab_p2p::{manager::{P2pConfig, P2pManager, AppEvent}, discovery::DISCOVERY_MULTICAST, peer::{PeerCandidate, ConnectionType}};
+use ab_p2p::{event::AppEvent, manager::{P2pConfig, P2pManager}, discovery::DISCOVERY_MULTICAST, peer::{PeerCandidate, ConnectionType}};
 use tokio::time::{sleep, timeout};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{Level, info};

@@ -4,7 +4,7 @@ use dashmap::{DashMap, DashSet};
 use tokio::{sync::mpsc, net::{TcpListener, TcpStream}};
 use tracing::{debug, error};
 
-use crate::{err, peer::{PeerId, PeerMetadata, PeerCandidate, Peer, DeviceType}, discovery::{DiscoveryEvent, discovery, create_duplex_multicast_socket}, event_loop::p2p_event_loop};
+use crate::{err, peer::{PeerId, PeerMetadata, PeerCandidate, Peer, DeviceType}, discovery::{discovery, create_duplex_multicast_socket}, event_loop::p2p_event_loop, event::*};
 
 pub struct P2pManager {
 
@@ -255,16 +255,6 @@ impl P2pManager {
 }
 
 
-#[derive(Debug)]
-pub enum AppEvent {
-    PeerDiscovered(PeerMetadata),
-    PeerConnected(Peer),
-    PeerDisconnected(PeerId)
-}
-
-pub enum InternalEvent {
-
-}
 
 pub struct P2pConfig {
     pub id: PeerId,

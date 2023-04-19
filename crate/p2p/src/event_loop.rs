@@ -2,7 +2,7 @@ use std::{sync::Arc, net::SocketAddr};
 use tokio::{sync::mpsc::{Receiver, UnboundedReceiver}, net::{TcpListener}};
 use tracing::{debug};
 
-use crate::{manager::{P2pManager, InternalEvent}, discovery::DiscoveryEvent};
+use crate::{event::{InternalEvent, DiscoveryEvent}, manager::{P2pManager}};
 
 
 pub(crate) async fn p2p_event_loop(

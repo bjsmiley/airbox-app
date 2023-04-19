@@ -8,5 +8,6 @@ mod utils;
 mod crypto;
 mod net;
 mod err;
+pub mod event;
 
 

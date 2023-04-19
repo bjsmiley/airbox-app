@@ -1,15 +1,12 @@
-use std::{net::SocketAddr, io::Cursor};
+use std::{net::SocketAddr};
 
 use bytes::{BytesMut, BufMut, Buf};
 use num_enum::{TryFromPrimitive, IntoPrimitive};
-use rustls::internal::msgs::message;
-use thiserror::Error;
 use tokio_util::codec::{Encoder, Decoder};
 use byteorder::{ReadBytesExt, BigEndian};
 
 
-use crate::{discovery::{DiscoveryEvent}, peer::{PeerMetadata, DeviceType, PeerId}};
-use crate::err;
+use crate::{err, event, peer::{PeerMetadata, DeviceType, PeerId}};
 
 
 pub(crate) const SIGNATURE: [u8; 2] = hex_literal::hex!("4040");
@@ -26,7 +23,7 @@ pub struct DiscoveryCodec;
 
 
 impl Decoder for DiscoveryCodec {
-    type Item = DiscoveryEvent;
+    type Item = event::DiscoveryEvent;
     type Error = err::ParseError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
@@ -39,7 +36,7 @@ impl Decoder for DiscoveryCodec {
         }
 
         match src.get_u8() {
-            0 => Ok(Some(DiscoveryEvent::PresenceRequest)),
+            0 => Ok(Some(event::DiscoveryEvent::PresenceRequest)),
             1 => {
                 let device_type_raw = src.get_u16();
                 let device_name_length = src.get_u16();
@@ -55,7 +52,7 @@ impl Decoder for DiscoveryCodec {
                 let device_addr: SocketAddr = device_addr_str.parse()?;
                 let device_type = DeviceType::try_from_primitive(device_type_raw)?;
                 
-                Ok(Some(DiscoveryEvent::PresenceResponse(PeerMetadata {
+                Ok(Some(event::DiscoveryEvent::PresenceResponse(PeerMetadata {
                     typ: device_type,
                     name: device_name,
                     id,
@@ -68,17 +65,17 @@ impl Decoder for DiscoveryCodec {
     }
 }
 
-impl Encoder<DiscoveryEvent> for DiscoveryCodec {
+impl Encoder<event::DiscoveryEvent> for DiscoveryCodec {
     type Error = err::ParseError;
 
-    fn encode(&mut self, item: DiscoveryEvent, dst: &mut BytesMut) -> Result<(), Self::Error> {        
+    fn encode(&mut self, item: event::DiscoveryEvent, dst: &mut BytesMut) -> Result<(), Self::Error> {        
         
         HeaderCodec.encode(Header::new(MessageType::Discovery, &item), dst)?;
         match item {
-            DiscoveryEvent::PresenceRequest => {
+            event::DiscoveryEvent::PresenceRequest => {
                 dst.put_u8(0); // DiscoveryType
             },
-            DiscoveryEvent::PresenceResponse(metadata) => {
+            event::DiscoveryEvent::PresenceResponse(metadata) => {
                 dst.put_u8(1); // DiscoveryType
                 dst.put_u16(metadata.typ.into()); // DeviceType
                 dst.put_u16(metadata.name.len().try_into().unwrap()); // DeviceNameLength
@@ -305,7 +302,7 @@ mod tests {
     use std::{net::{SocketAddr, SocketAddrV4, Ipv4Addr}, fmt::Debug};
     use bytes::{BytesMut, BufMut};
     use tokio_util::codec::{Decoder, Encoder};
-    use crate::{discovery::DiscoveryEvent, peer::{PeerMetadata, PeerId}, proto::{ConnectCodec, Connect}};
+    use crate::{event::DiscoveryEvent, peer::{PeerMetadata, PeerId}, proto::{ConnectCodec, Connect}};
     use super::{DiscoveryCodec, SIGNATURE};
 
 

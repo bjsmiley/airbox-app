@@ -4,7 +4,7 @@ use tokio_util::udp::UdpFramed;
 use futures::{StreamExt, SinkExt};
 use tracing::{error,debug};
 
-use crate::{err, peer::PeerMetadata, proto::DiscoveryCodec};
+use crate::{event::DiscoveryEvent, proto::DiscoveryCodec};
 
 pub static DISCOVERY_MULTICAST: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 98);
 
@@ -113,31 +113,3 @@ pub fn discovery(sock: UdpSocket, addr: SocketAddr) -> (mpsc::Sender<DiscoveryEv
     (app_tx, transport_rx)
 
 }
-
-pub enum DiscoveryEvent {
-    PresenceRequest,
-    PresenceResponse(PeerMetadata),
-    //PeerDiscovered
-}
-
-impl crate::proto::Frame for DiscoveryEvent {
-    fn len(&self) -> u16 {
-        match self {
-            DiscoveryEvent::PresenceRequest => 1,
-            DiscoveryEvent::PresenceResponse(meta) => 
-                1 + 2 + 2 + 
-                u16::try_from(meta.name.len()).unwrap() + 
-                40 + 2 + 
-                u16::try_from(meta.addr.to_string().len()).unwrap()
-        }
-    }
-}
-
-// pub impl Length for DiscoveryEvent {
-//     fn get_length(&self) -> u16 {
-//         match self {
-//             Self::PresenceRequest => 1,
-//             Self::PresenceResponse(metadata)
-//         }
-//     }
-// }
