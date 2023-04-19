@@ -1,10 +1,10 @@
-use std::{sync::Arc, net::{SocketAddr, Ipv4Addr}, collections::HashSet};
+use std::{sync::Arc, net::{SocketAddr, Ipv4Addr, SocketAddrV4}, collections::HashSet};
 
 use dashmap::{DashMap, DashSet};
 use tokio::{sync::mpsc, net::{TcpListener, TcpStream}};
 use tracing::{debug, error};
 
-use crate::{err, peer::{PeerId, PeerMetadata, PeerCandidate, Peer, DeviceType}, discovery, event_loop::p2p_event_loop, event::*};
+use crate::{err, peer::{PeerId, PeerMetadata, PeerCandidate, Peer, DeviceType}, event_loop, discovery, event::*};
 
 pub struct P2pManager {
 
@@ -40,52 +40,23 @@ pub struct P2pManager {
 
 }
 
+pub struct P2pConfig {
+    pub id: PeerId,
+    pub device: DeviceType,
+    pub name: String,
+    pub multicast: SocketAddr,
+    pub p2p_addr: SocketAddr,
+}
+
 impl P2pManager {
     pub async fn new(config: P2pConfig) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AppEvent>), err::InitError> {
         
-        // let peer_id = PeerId::from_string(config.id.clone())?;
-        
-        // setup multicast udp
-        // let discover = {
-        //     let bind_addr = config.discovery_addr.clone();
-        //     let multicast = config.multicast_ip.clone();
-        //     if !multicast.is_multicast() { return Err(P2pError::InvalidMulticastAddr); }
-        //     let sock = UdpSocket::bind(bind_addr).await?;
-        //     let IpAddr::V4(interface) = bind_addr.ip() else {
-        //         error!("no way");
-        //         panic!();
-        //     };
-        //     sock.
-        //     sock.join_multicast_v4(multicast, interface)?;
-        //     debug!("Multicast address: {}", multicast);
-        //     debug!("Udp socket: {}", sock.local_addr()?);
-        //     discovery(sock, bind_addr)
-        // };
-
-        // let discover = {
-        //     let addr = config.multicast_ip.clone();
-        //     if !addr.is_multicast() { return Err(P2pError::InvalidMulticastAddr); }
-        //     let sock = UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0)).await?;
-        //     // let IpAddr::V4(interface) = bind_addr.ip() else {
-        //     //     error!("no way");
-        //     //     panic!();
-        //     // };
-        //     sock.join_multicast_v4(addr, Ipv4Addr::UNSPECIFIED)?;
-        //     let finally = sock.local_addr()?;
-        //     debug!("Multicast address: {}", addr);
-        //     debug!("Udp socket: {}", finally);
-        //     discovery(sock, SocketAddr::V4(SocketAddrV4::new(addr, 5545)))
-        // };
-
         let discover = {
-            // let (socket, multi_addr) = create_duplex_multicast_socket(&Ipv4Addr::UNSPECIFIED,
+                // use LOCALHOST or UNSPECIFICED?
+                let local = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, config.multicast.port()));
                 let (socket, multi_addr) = discovery::multicast(
-                    // &"192.168.88.231".parse().unwrap(),
-                    &"127.0.0.1".parse().unwrap(),
-
-                    config.addr_port,
-                 &config.discovery_addr, 
-                 config.discovery_port)?;
+                    &local,
+                    &config.multicast)?;
             discovery::start(socket, multi_addr)
         };
 
@@ -99,8 +70,6 @@ impl P2pManager {
             typ: config.device,
             name: config.name,
             addr: listener.local_addr()?
-            // ip: listener.local_addr()?.ip().to_string(),
-            // port: listener.local_addr()?.port()
         };
 
         let internal_channel = mpsc::unbounded_channel();
@@ -118,7 +87,7 @@ impl P2pManager {
             app_channel: app_channel.0
         });
 
-        tokio::spawn(p2p_event_loop(this.clone(),
+        tokio::spawn(event_loop::p2p_event_loop(this.clone(),
          discover.1,
          internal_channel.1,
         listener));
@@ -253,41 +222,3 @@ impl P2pManager {
     // [ END ] Crate methods the event loop can call
 
 }
-
-
-
-pub struct P2pConfig {
-    pub id: PeerId,
-    pub device: DeviceType,
-    pub name: String,
-    pub addr_port: u16,
-    pub discovery_port: u16,
-    pub discovery_addr: Ipv4Addr,
-    pub p2p_addr: SocketAddr,
-}
-
-// #[derive(Debug, Error)]
-// pub enum P2pError {
-//     #[error("Invalid Peer Id")]
-//     InvalidPeerId(#[from] PeerIdError),
-//     #[error("The address for discovery is not a multicast address")]
-//     InvalidMulticastAddr,
-//     #[error("Could not start discovery")]
-//     Discovery(#[from] discovery::CreateSocketError),
-//     #[error("Tokio io error")]
-//     Tokio(#[from] tokio::io::Error)
-// }
-
-// P2p errors as the client trying to connect
-// #[derive(Debug, Error)]
-// pub enum P2pClientConnectError {
-//     #[error("Peer already connected")]
-//     AlreadyConnected,
-//     #[error("Peer not found")]
-//     NotFound,
-//     #[error("Peer has no connectable addresses")]
-//     Address,
-//     #[error("A handshake error occured")]
-//     Handshake(#[from] crate::net::ConnectHandshakeError)
-
-// }

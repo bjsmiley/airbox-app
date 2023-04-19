@@ -1,5 +1,4 @@
 use std::{net::{SocketAddr}, collections::HashSet, sync::Arc};
-use num_enum::{TryFromPrimitive, IntoPrimitive};
 use serde::{Serialize, Deserialize};
 use tokio::{net::TcpStream, io::DuplexStream};
 
@@ -23,7 +22,7 @@ pub struct PeerMetadata {
     //pub port: u16
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize, TryFromPrimitive, IntoPrimitive)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize, num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
 #[repr(u16)]
 pub enum DeviceType {
     // XboxOne = 1,

@@ -1,9 +1,9 @@
-use std::{time::Duration, error::Error};
+use std::{time::Duration, error::Error, net::SocketAddrV4};
 
 use ab_p2p::{event::AppEvent, manager::{P2pConfig, P2pManager}, discovery::DISCOVERY_MULTICAST, peer::{PeerCandidate, ConnectionType}};
 use tokio::time::{sleep, timeout};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{Level, info};
+use tracing::{Level};
 
 use crate::common::*;
 
@@ -19,34 +19,26 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt()
         .with_max_level(Level::DEBUG)
         .with_thread_ids(true)
-        //.with_file(true)
-        //.with_line_number(true)
         .init();
 
     let shared_secret = "123ABCThisIsSuperSecretShhhh!";
 
     // node A setup
-    let discovery_addr = DISCOVERY_MULTICAST;
     let config = P2pConfig {
         id: create_peer_id_one(),
         device: ab_p2p::peer::DeviceType::Windows10Desktop,
         name: String::from("Tester's laptop"),
-        discovery_addr,
-        discovery_port: 50692,
-        addr_port: 50692,
+        multicast: std::net::SocketAddr::V4(SocketAddrV4::new(DISCOVERY_MULTICAST, 50692)),
         p2p_addr: create_p2p_addr()
     };
     let (manager_a, mut rx_a) = P2pManager::new(config).await?;
 
     // node B setup
-    let discovery_addr = DISCOVERY_MULTICAST;
     let config = P2pConfig {
         id: create_peer_id_two(),
         device: ab_p2p::peer::DeviceType::AppleiPhone,
         name: String::from("Tester's phone"),
-        discovery_addr,
-        discovery_port: 50692,
-        addr_port: 50692,
+        multicast: std::net::SocketAddr::V4(SocketAddrV4::new(DISCOVERY_MULTICAST, 50692)),
         p2p_addr: create_p2p_addr()
     };
     let (manager_b, mut rx_b) = P2pManager::new(config).await?;
@@ -62,10 +54,6 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     sleep(Duration::from_millis(100)).await;
     manager_a.request_presence().await;
     sleep(Duration::from_millis(100)).await;
-    // manager_a.request_presence().await;
-    // sleep(Duration::from_millis(100)).await;
-    // manager_a.request_presence().await;
-    // sleep(Duration::from_millis(100)).await;
 
     // assert node a discovered node b
     let Ok(Some(AppEvent::PeerDiscovered(metadata))) = timeout(Duration::from_millis(100), rx_a.recv()).await else {
@@ -74,11 +62,6 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
         return Ok(());
     };
     assert!(manager_a.is_discovered(&metadata.id));
-
-    // if let Ok(event) = rx_b.try_recv() {
-    //     assert!(false, "node b should not receive an app event: {:?}", event);
-    //     return Ok(());
-    // };
     let metadata_b = manager_b.get_metadata();
     assert_eq!(metadata_b.clone(), metadata);
 
@@ -97,28 +80,28 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     let metadata_a = manager_a.get_metadata();
     assert!(manager_b.is_connected(&metadata_a.id));
 
+    // assert connection types
     assert_eq!(ConnectionType::Client, proxy_to_b.conn_type);
     assert_eq!(ConnectionType::Server, proxy_to_a.conn_type);
+
+    // assert node A can send to node B
     let mut buffer: [u8; 10] = [0; 10];
 
     proxy_to_b.conn.write_all(b"PING").await?;
     let len = proxy_to_a.conn.read(&mut buffer[..]).await?;
     assert_eq!(b"PING"[..], buffer[..len]);
 
+    // assert node B can send to node A
     proxy_to_a.conn.write_all(b"PONG").await?;
     let len = proxy_to_b.conn.read(&mut buffer[..]).await?;
     assert_eq!(b"PONG"[..], buffer[..len]);
 
-    
+    // assert node A informs when node B disconnects
     drop(proxy_to_a);
-
     let Ok(Some(AppEvent::PeerDisconnected(disconnect_id))) = timeout(Duration::from_millis(100), rx_a.recv()).await else {
         assert!(false, "node a did not recieve disconnect event");
         return Ok(());
     };
-
-    
-
     assert_eq!(metadata_b.id, disconnect_id);
     assert!(!manager_b.is_connected(&metadata_a.id));
     assert!(!manager_a.is_connected(&metadata_b.id));
@@ -132,14 +115,6 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     //     assert!(false, "the tcp connection should fail writes");
     //     return Ok(());
     // };
-
-
-
-
-
-
-
-
 
     Ok(())
 }

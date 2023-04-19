@@ -16,31 +16,27 @@ pub static DISCOVERY_MULTICAST: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 98);
     let multi_addr: Ipv4Addr = "239.255.42.98".parse()?;
     let port = 50692;
  */
-pub fn multicast(addr: &Ipv4Addr, addr_port: u16, multi_addr: &Ipv4Addr, multi_port: u16) -> Result<(UdpSocket, SocketAddr), std::io::Error> {
+pub fn multicast(addr: &SocketAddr, multi_addr: &SocketAddr) -> Result<(UdpSocket, SocketAddr), std::io::Error> {
     
     use socket2::{Domain, Type, Protocol, Socket};
 
-    assert!(multi_addr.is_multicast(), "Must be multcast address");
-
-    let multi_addr = SocketAddrV4::new(multi_addr.clone(), multi_port);
-    let addr = SocketAddrV4::new(addr.clone(), addr_port);
-
+    assert!(multi_addr.ip().is_multicast(), "Must be multcast address");
     let socket = Socket::new(
         Domain::IPV4,
         Type::DGRAM,
         Some(Protocol::UDP),
     )?;
-
     socket.set_reuse_address(true)?;
-    socket.bind(&socket2::SockAddr::from(addr))?;
+    socket.bind(&socket2::SockAddr::from(addr.clone()))?;
     socket.set_multicast_loop_v4(true)?;
-    //socket.set_multicast_loop_v4(false)?;
-    socket.join_multicast_v4(
-        multi_addr.ip(),
-        addr.ip(),
-    )?;
+    match (addr, multi_addr) {
+        (SocketAddr::V4(a), SocketAddr::V4(m)) => {
+            socket.join_multicast_v4(m.ip(), a.ip())?
+        }
+        _ => {}
+    }
     socket.set_nonblocking(true)?;
-    Ok((UdpSocket::from_std(socket.into())?, multi_addr.into()))
+    Ok((UdpSocket::from_std(socket.into())?, *multi_addr))
 }
 
 
