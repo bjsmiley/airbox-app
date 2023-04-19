@@ -7,7 +7,7 @@ use crate::err;
 
 pub struct Png(String);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PairingAuthenticator {
     totp: TOTP
 }

@@ -2,7 +2,7 @@ use std::{net::{SocketAddr}, collections::HashSet, sync::Arc};
 use serde::{Serialize, Deserialize};
 use tokio::{net::TcpStream, io::DuplexStream};
 
-use crate::manager::P2pManager;
+use crate::{manager::P2pManager, pairing::PairingAuthenticator};
 
 use super::PeerId;
 
@@ -51,20 +51,20 @@ pub enum DeviceType {
 /// deemed acceptable as the attacker can only modify primitive metadata such a name or device type.
 /// When we initiated communication with the device we will ensure we are talking to the correct device using
 /// TOTP not PAKE (specially SPAKE2) for pairing and verifying the TLS (soon) certificate for general communication.
-#[derive(Debug, Clone, Serialize, Deserialize)] // TODO: Type
+#[derive(Debug, Clone /*Serialize, Deserialize*/)] // TODO: Type
 pub struct PeerCandidate {
 	pub id: PeerId,
 	pub metadata: PeerMetadata,
-	pub addresses: HashSet<SocketAddr>,
-	pub auth_secret: String
+	pub addrs: HashSet<SocketAddr>,
+	pub auth: PairingAuthenticator
 }
 
 impl PeerCandidate {
-	pub fn from_metadata(metadata: &PeerMetadata, auth: String) -> Self {
+	pub fn new(metadata: &PeerMetadata, auth: PairingAuthenticator) -> Self {
 		Self {
 			id: metadata.id.clone(),
-			addresses: HashSet::new(),
-			auth_secret: auth,
+			addrs: HashSet::new(),
+			auth,
 			metadata: metadata.clone()
 		}
 	}

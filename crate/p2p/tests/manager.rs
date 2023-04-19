@@ -1,6 +1,6 @@
 use std::{time::Duration, error::Error, net::SocketAddrV4};
 
-use ab_p2p::{event::AppEvent, manager::{P2pConfig, P2pManager}, discovery::DISCOVERY_MULTICAST, peer::{PeerCandidate, ConnectionType}};
+use ab_p2p::{event::AppEvent, manager::{P2pConfig, P2pManager}, discovery::DISCOVERY_MULTICAST, peer::{PeerCandidate, ConnectionType}, pairing::PairingAuthenticator};
 use tokio::time::{sleep, timeout};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{Level};
@@ -21,7 +21,10 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
         .with_thread_ids(true)
         .init();
 
-    let shared_secret = "123ABCThisIsSuperSecretShhhh!";
+    let shared_secret = b"123ABCThisIsSuperSecretShhhh!";
+    let auth_a = PairingAuthenticator::new(shared_secret.to_vec())?;
+    let auth_b = PairingAuthenticator::new(shared_secret.to_vec())?;
+
 
     // node A setup
     let config = P2pConfig {
@@ -46,8 +49,8 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     // subscribe to node B
     let a = manager_a.get_metadata();
     let b = manager_b.get_metadata();
-    manager_a.add_known_peer(PeerCandidate::from_metadata(b, shared_secret.clone().to_string()));
-    manager_b.add_known_peer(PeerCandidate::from_metadata(a, shared_secret.clone().to_string()));
+    manager_a.add_known_peer(PeerCandidate::new(b, auth_b));
+    manager_b.add_known_peer(PeerCandidate::new(a, auth_a));
 
 
     // node A sends presence request

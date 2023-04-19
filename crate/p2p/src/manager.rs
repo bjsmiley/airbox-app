@@ -131,7 +131,7 @@ impl P2pManager {
 
         // let peer = candidate.clone();
 
-        for addr in &candidate.addresses {
+        for addr in &candidate.addrs {
             match TcpStream::connect(addr).await {
                 Err(e) => {
                     error!("Attempt to connect to address {:?} failed {:?}", addr, e);
@@ -188,10 +188,10 @@ impl P2pManager {
                 let mut candidate = PeerCandidate {
                     id: id.clone(),
                     metadata: peer.clone(),
-                    addresses: HashSet::new(),
-                    auth_secret: known.1.auth_secret
+                    addrs: HashSet::new(),
+                    auth: known.1.auth
                 };
-                candidate.addresses.insert(peer.addr.clone());
+                candidate.addrs.insert(peer.addr.clone());
                 self.discovered_peers.insert(id.clone(), candidate.clone());
                 self.known_peers.insert(id, candidate.clone());
                 debug!("discovered peer is recorded");
