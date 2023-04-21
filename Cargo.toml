@@ -1,6 +1,7 @@
 [workspace]
 members = [
-    "crate/p2p"
+    "crate/p2p",
+    "core"
 ]
 
 [workspace.dependencies]
