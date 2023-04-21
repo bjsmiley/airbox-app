@@ -1,12 +1,10 @@
-pub mod peer;
-pub mod pairing;
-pub mod manager;
 pub mod discovery;
+mod err;
 pub mod event;
-mod proto;
 mod event_loop;
 mod hmac;
+pub mod manager;
 mod net;
-mod err;
-
-
+pub mod pairing;
+pub mod peer;
+mod proto;

@@ -9,11 +9,11 @@ pub enum InitError {
 
     /// An unspecified network error occured
     #[error("A network related error occured")]
-    Net(#[from] std::io::Error)
+    Net(#[from] std::io::Error),
 }
 
 /// An error that can occur during the handshake process
-#[derive(Debug,Error)]
+#[derive(Debug, Error)]
 pub enum HandshakeError {
     /// The parser failed
     #[error("The parser or i/o layer recieved an error")]
@@ -49,7 +49,7 @@ pub enum HandshakeError {
 
     /// The remote peer had no connectable addresses
     #[error("No connectable addresses")]
-    Addr
+    Addr,
 }
 
 impl From<ring::error::Unspecified> for HandshakeError {
@@ -62,12 +62,12 @@ impl From<ring::error::Unspecified> for HandshakeError {
 #[derive(Error, Debug)]
 pub enum IdError {
     /// The id is too long
-	#[error("the id must be 40 chars in length")]
-	Length,
+    #[error("the id must be 40 chars in length")]
+    Length,
 
     /// The id can only contain alphanumeric character
-	#[error("the id must be alphanumeric")]
-	InvalidCharacters,
+    #[error("the id must be alphanumeric")]
+    InvalidCharacters,
 }
 
 /// An error originating from parsing protocol packets
@@ -95,10 +95,14 @@ pub enum ParseError {
 
     /// The peer id is not valid
     #[error("The peer id {0} is not valid")]
-    Id(#[from] IdError)
+    Id(#[from] IdError),
 }
 
-impl<T> From<num_enum::TryFromPrimitiveError<T>> for ParseError where T: num_enum::TryFromPrimitive, T::Primitive: Into<usize> {
+impl<T> From<num_enum::TryFromPrimitiveError<T>> for ParseError
+where
+    T: num_enum::TryFromPrimitive,
+    T::Primitive: Into<usize>,
+{
     fn from(value: num_enum::TryFromPrimitiveError<T>) -> Self {
         ParseError::Enum(value.number.into())
     }
@@ -107,7 +111,6 @@ impl<T> From<num_enum::TryFromPrimitiveError<T>> for ParseError where T: num_enu
 /// Errors when pairing devices
 #[derive(Error, Debug)]
 pub enum PairingError {
-
     /// A general totp error
     #[error("Error initializing Totp")]
     Totp(#[from] totp_rs::TotpUrlError),
@@ -122,7 +125,7 @@ pub enum PairingError {
 
     /// The current system time could not be read
     #[error("Errors checking system time")]
-    Time(#[from] std::time::SystemTimeError)
+    Time(#[from] std::time::SystemTimeError),
 }
 
 impl From<String> for PairingError {

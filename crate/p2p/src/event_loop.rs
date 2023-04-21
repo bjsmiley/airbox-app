@@ -1,16 +1,21 @@
-use std::{sync::Arc, net::SocketAddr};
-use tokio::{sync::mpsc::{Receiver, UnboundedReceiver}, net::{TcpListener}};
-use tracing::{debug};
+use std::{net::SocketAddr, sync::Arc};
+use tokio::{
+    net::TcpListener,
+    sync::mpsc::{Receiver, UnboundedReceiver},
+};
+use tracing::debug;
 
-use crate::{event::{InternalEvent, DiscoveryEvent}, manager::{P2pManager}};
-
+use crate::{
+    event::{DiscoveryEvent, InternalEvent},
+    manager::P2pManager,
+};
 
 pub(crate) async fn p2p_event_loop(
-    manager: Arc<P2pManager>, 
+    manager: Arc<P2pManager>,
     mut discovery: Receiver<(DiscoveryEvent, SocketAddr)>,
     mut internal_channel: UnboundedReceiver<InternalEvent>,
-    listener: TcpListener) {
-
+    listener: TcpListener,
+) {
     loop {
         tokio::select! {
             discovery_event = discovery.recv() => {
@@ -45,7 +50,7 @@ pub(crate) async fn p2p_event_loop(
 
             stream_event = listener.accept() => {
                 let Ok((stream, addr)) = stream_event else {
-                   continue; 
+                   continue;
                 };
                 debug!("Peer attempting to connect at {:?}", &addr);
                 let manager = manager.clone();
@@ -58,7 +63,4 @@ pub(crate) async fn p2p_event_loop(
         }
     }
     debug!("Shutting down p2p event loop");
-
 }
-
-

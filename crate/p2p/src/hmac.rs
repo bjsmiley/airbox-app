@@ -1,16 +1,14 @@
-use ring::{hmac, error};
-
+use ring::{error, hmac};
 
 pub(crate) fn sign(key: &[u8], data: &[u8]) -> hmac::Tag {
     let key = hmac::Key::new(hmac::HMAC_SHA256, key);
     hmac::sign(&key, data)
 }
 
-pub(crate) fn verify(key: &[u8], data: &[u8], hmac: &[u8]) -> Result<(),error::Unspecified> {
+pub(crate) fn verify(key: &[u8], data: &[u8], hmac: &[u8]) -> Result<(), error::Unspecified> {
     let key = hmac::Key::new(hmac::HMAC_SHA256, key);
     hmac::verify(&key, data, hmac)
 }
-
 
 #[cfg(test)]
 mod tests {

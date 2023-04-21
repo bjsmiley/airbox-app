@@ -1,31 +1,40 @@
-use std::{sync::Arc, net::{SocketAddr, Ipv4Addr, SocketAddrV4}, collections::HashSet};
+use std::{
+    collections::HashSet,
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    sync::Arc,
+};
 
 use dashmap::{DashMap, DashSet};
-use tokio::{sync::mpsc, net::{TcpListener, TcpStream}};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::mpsc,
+};
 use tracing::{debug, error};
 
-use crate::{err, peer::{PeerId, PeerMetadata, PeerCandidate, Peer, DeviceType}, event_loop, discovery, event::*};
+use crate::{
+    discovery, err,
+    event::*,
+    event_loop,
+    peer::{DeviceType, Peer, PeerCandidate, PeerId, PeerMetadata},
+};
 
 pub struct P2pManager {
-
     // store internal state
-
     /// PeerId is the unique identifier of the current peer.
     pub(crate) id: PeerId,
-    
+
     // /// identity is the TLS identity of the current peer.
-	// pub(crate) identity: (Certificate, PrivateKey),
-    
+    // pub(crate) identity: (Certificate, PrivateKey),
     /// The metadata of the current peer
     pub(crate) metadata: PeerMetadata,
 
-    /// known_peers are peers who have been previously paired up with, only from these peers can the 
+    /// known_peers are peers who have been previously paired up with, only from these peers can the
     /// P2p Manager discover and connect with.
     known_peers: DashMap<PeerId, PeerCandidate>,
 
     /// discovered_peers contains a list of all peers which have been discovered by any discovery mechanism.
     discovered_peers: DashMap<PeerId, PeerCandidate>,
-    
+
     /// connected_peers
     connected_peers: DashSet<PeerId>,
 
@@ -33,11 +42,10 @@ pub struct P2pManager {
     discovery_channel: mpsc::Sender<DiscoveryEvent>,
 
     /// internal_channel is a channel which is used to communicate with the main internal event loop.
-	internal_channel: mpsc::UnboundedSender<InternalEvent>,
+    internal_channel: mpsc::UnboundedSender<InternalEvent>,
 
     /// app_channel is a channel which is used to communicate with the application
-    app_channel: mpsc::UnboundedSender<AppEvent>
-
+    app_channel: mpsc::UnboundedSender<AppEvent>,
 }
 
 pub struct P2pConfig {
@@ -49,32 +57,37 @@ pub struct P2pConfig {
 }
 
 impl P2pManager {
-    pub async fn new(config: P2pConfig) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AppEvent>), err::InitError> {
-        
+    pub async fn new(
+        config: P2pConfig,
+    ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AppEvent>), err::InitError> {
         let discover = {
-                // use LOCALHOST or UNSPECIFICED?
-                let local = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, config.multicast.port()));
-                let (socket, multi_addr) = discovery::multicast(
-                    &local,
-                    &config.multicast)?;
+            // use LOCALHOST or UNSPECIFICED?
+            let local = SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::LOCALHOST,
+                config.multicast.port(),
+            ));
+            let (socket, multi_addr) = discovery::multicast(&local, &config.multicast)?;
             discovery::start(socket, multi_addr)
         };
 
         // setup tcp listener
         let listener = TcpListener::bind(config.p2p_addr).await?;
-        debug!("Peer {} listening on {}", config.id.clone(), listener.local_addr()?);
+        debug!(
+            "Peer {} listening on {}",
+            config.id.clone(),
+            listener.local_addr()?
+        );
 
         // setup metadata
         let metadata = PeerMetadata {
             id: config.id.clone(),
             typ: config.device,
             name: config.name,
-            addr: listener.local_addr()?
+            addr: listener.local_addr()?,
         };
 
         let internal_channel = mpsc::unbounded_channel();
         let app_channel = mpsc::unbounded_channel();
-
 
         let this = Arc::new(Self {
             id: config.id,
@@ -84,13 +97,15 @@ impl P2pManager {
             connected_peers: DashSet::new(),
             discovery_channel: discover.0,
             internal_channel: internal_channel.0,
-            app_channel: app_channel.0
+            app_channel: app_channel.0,
         });
 
-        tokio::spawn(event_loop::p2p_event_loop(this.clone(),
-         discover.1,
-         internal_channel.1,
-        listener));
+        tokio::spawn(event_loop::p2p_event_loop(
+            this.clone(),
+            discover.1,
+            internal_channel.1,
+            listener,
+        ));
 
         Ok((this, app_channel.1))
     }
@@ -102,11 +117,14 @@ impl P2pManager {
 
     // called by the application to send a presenct request
     pub async fn request_presence(&self) {
-        if let Err(e) = self.discovery_channel.send(DiscoveryEvent::PresenceRequest).await {
+        if let Err(e) = self
+            .discovery_channel
+            .send(DiscoveryEvent::PresenceRequest)
+            .await
+        {
             error!("application is unable to request presence: {}", e);
         }
         // debug!("peer is emitting presence request");
-
     }
 
     // application calls this to get local metadata
@@ -123,8 +141,13 @@ impl P2pManager {
     }
 
     /// application calls this to connect to a peer
-    pub async fn connect_to_peer(self: &Arc<Self>, id: &PeerId) -> Result<Peer,err::HandshakeError> {
-        if self.connected_peers.contains(id) { return Err(err::HandshakeError::Dup); }
+    pub async fn connect_to_peer(
+        self: &Arc<Self>,
+        id: &PeerId,
+    ) -> Result<Peer, err::HandshakeError> {
+        if self.connected_peers.contains(id) {
+            return Err(err::HandshakeError::Dup);
+        }
         let Some(candidate) = self.discovered_peers.get(id) else {
             return Err(err::HandshakeError::NotFound)
         };
@@ -145,8 +168,6 @@ impl P2pManager {
             }
         }
         Err(err::HandshakeError::Addr)
-
-
     }
 
     // [START] Crate methods the event loop can call
@@ -154,7 +175,11 @@ impl P2pManager {
     /// called by a connected peer's connection handler when closing
     pub(crate) fn peer_disconnected(self: &Arc<Self>, id: &PeerId) {
         self.connected_peers.remove(id);
-        if self.app_channel.send(AppEvent::PeerDisconnected(id.clone())).is_err() {
+        if self
+            .app_channel
+            .send(AppEvent::PeerDisconnected(id.clone()))
+            .is_err()
+        {
             error!("failed to send PeerDisconnected event to the application");
         }
     }
@@ -163,9 +188,8 @@ impl P2pManager {
     pub(crate) fn get_peer_candidate(&self, id: &PeerId) -> Option<PeerCandidate> {
         self.discovered_peers
             .get(id)
-            .map(|p| p.value().clone() )
-            .or(self.known_peers.get(id)
-            .map(|p| p.value().clone()))
+            .map(|p| p.value().clone())
+            .or(self.known_peers.get(id).map(|p| p.value().clone()))
     }
 
     /// event loop calls this to determine if incoming connection is from a discovered peer
@@ -176,26 +200,26 @@ impl P2pManager {
     //     Some(peer.value().clone())
     // }
 
-
-
-
     /// event loop calls this to inform manager a peer was discovered
     pub(crate) fn handle_peer_discovered(&self, peer: PeerMetadata) {
         let id = peer.id.clone();
-        if !self.connected_peers.contains(&id) && 
-           !self.discovered_peers.contains_key(&id) {
+        if !self.connected_peers.contains(&id) && !self.discovered_peers.contains_key(&id) {
             if let Some(known) = self.known_peers.remove(&id) {
                 let mut candidate = PeerCandidate {
                     id: id.clone(),
                     metadata: peer.clone(),
                     addrs: HashSet::new(),
-                    auth: known.1.auth
+                    auth: known.1.auth,
                 };
                 candidate.addrs.insert(peer.addr);
                 self.discovered_peers.insert(id.clone(), candidate.clone());
                 self.known_peers.insert(id, candidate.clone());
                 debug!("discovered peer is recorded");
-                if self.app_channel.send(AppEvent::PeerDiscovered(candidate.metadata)).is_err() {
+                if self
+                    .app_channel
+                    .send(AppEvent::PeerDiscovered(candidate.metadata))
+                    .is_err()
+                {
                     error!("failed to send PeerDiscovered event to the application");
                 };
             }
@@ -204,7 +228,11 @@ impl P2pManager {
 
     /// event loop calls this to inform manager a peer requested our precesence
     pub(crate) async fn handle_presence_request(&self) {
-        if let Err(e) = self.discovery_channel.send(DiscoveryEvent::PresenceResponse(self.metadata.clone())).await {
+        if let Err(e) = self
+            .discovery_channel
+            .send(DiscoveryEvent::PresenceResponse(self.metadata.clone()))
+            .await
+        {
             error!("event loop is unable to emit presence: {}", e);
         }
         debug!("peer is emitting presence");
@@ -214,10 +242,13 @@ impl P2pManager {
     pub(crate) fn handle_new_connection(&self, peer: Peer) {
         let id = peer.id.clone();
         self.connected_peers.insert(id);
-        if self.app_channel.send(AppEvent::PeerConnected(peer)).is_err() {
+        if self
+            .app_channel
+            .send(AppEvent::PeerConnected(peer))
+            .is_err()
+        {
             error!("failed to send PeerConnected event to the application");
         };
     }
     // [ END ] Crate methods the event loop can call
-
 }

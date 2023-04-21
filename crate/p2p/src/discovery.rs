@@ -1,23 +1,21 @@
-use std::{net::{SocketAddr, Ipv4Addr}};
-use tokio::{sync::mpsc, net::UdpSocket};
+use futures::{SinkExt, StreamExt};
+use std::net::{Ipv4Addr, SocketAddr};
+use tokio::{net::UdpSocket, sync::mpsc};
 use tokio_util::udp::UdpFramed;
-use futures::{StreamExt, SinkExt};
-use tracing::{error,debug};
+use tracing::{debug, error};
 
 use crate::{event::DiscoveryEvent, proto::DiscoveryCodec};
 
 pub static DISCOVERY_MULTICAST: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 98);
 
-pub fn multicast(addr: &SocketAddr, multi_addr: &SocketAddr) -> Result<(UdpSocket, SocketAddr), std::io::Error> {
-    
-    use socket2::{Domain, Type, Protocol, Socket};
+pub fn multicast(
+    addr: &SocketAddr,
+    multi_addr: &SocketAddr,
+) -> Result<(UdpSocket, SocketAddr), std::io::Error> {
+    use socket2::{Domain, Protocol, Socket, Type};
 
     assert!(multi_addr.ip().is_multicast(), "Must be multcast address");
-    let socket = Socket::new(
-        Domain::IPV4,
-        Type::DGRAM,
-        Some(Protocol::UDP),
-    )?;
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_reuse_address(true)?;
     socket.bind(&socket2::SockAddr::from(*addr))?;
     socket.set_multicast_loop_v4(true)?;
@@ -28,9 +26,13 @@ pub fn multicast(addr: &SocketAddr, multi_addr: &SocketAddr) -> Result<(UdpSocke
     Ok((UdpSocket::from_std(socket.into())?, *multi_addr))
 }
 
-
-pub fn start(sock: UdpSocket, addr: SocketAddr) -> (mpsc::Sender<DiscoveryEvent>, mpsc::Receiver<(DiscoveryEvent, SocketAddr)>) {
-
+pub fn start(
+    sock: UdpSocket,
+    addr: SocketAddr,
+) -> (
+    mpsc::Sender<DiscoveryEvent>,
+    mpsc::Receiver<(DiscoveryEvent, SocketAddr)>,
+) {
     let (app_tx, mut app_rx) = mpsc::channel(1024);
     let (transport_tx, transport_rx) = mpsc::channel::<(DiscoveryEvent, SocketAddr)>(1024);
     let discovery_socket = sock;
@@ -59,7 +61,7 @@ pub fn start(sock: UdpSocket, addr: SocketAddr) -> (mpsc::Sender<DiscoveryEvent>
                                 }
                             },
                         }
-                    } 
+                    }
                     else {
                         debug!("Discovery shutting down. Application Sender closed.");
                         break;
@@ -96,5 +98,4 @@ pub fn start(sock: UdpSocket, addr: SocketAddr) -> (mpsc::Sender<DiscoveryEvent>
     });
 
     (app_tx, transport_rx)
-
 }

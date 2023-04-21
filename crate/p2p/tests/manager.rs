@@ -1,21 +1,22 @@
-use std::{time::Duration, error::Error, net::SocketAddrV4};
+use std::{error::Error, net::SocketAddrV4, time::Duration};
 
-use ab_p2p::{event::AppEvent, manager::{P2pConfig, P2pManager}, discovery::DISCOVERY_MULTICAST, peer::{PeerCandidate, ConnectionType}, pairing::PairingAuthenticator};
-use tokio::time::{sleep, timeout};
+use ab_p2p::{
+    discovery::DISCOVERY_MULTICAST,
+    event::AppEvent,
+    manager::{P2pConfig, P2pManager},
+    pairing::PairingAuthenticator,
+    peer::{ConnectionType, PeerCandidate},
+};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{Level};
+use tokio::time::{sleep, timeout};
+use tracing::Level;
 
 use crate::common::*;
 
 mod common;
 
-
-
-
-
 #[tokio::test]
 async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
-
     tracing_subscriber::fmt()
         .with_max_level(Level::DEBUG)
         .with_thread_ids(true)
@@ -25,14 +26,13 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     let auth_a = PairingAuthenticator::new(shared_secret.to_vec())?;
     let auth_b = PairingAuthenticator::new(shared_secret.to_vec())?;
 
-
     // node A setup
     let config = P2pConfig {
         id: create_peer_id_one(),
         device: ab_p2p::peer::DeviceType::Windows10Desktop,
         name: String::from("Tester's laptop"),
         multicast: std::net::SocketAddr::V4(SocketAddrV4::new(DISCOVERY_MULTICAST, 50692)),
-        p2p_addr: create_p2p_addr()
+        p2p_addr: create_p2p_addr(),
     };
     let (manager_a, mut rx_a) = P2pManager::new(config).await?;
 
@@ -42,7 +42,7 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
         device: ab_p2p::peer::DeviceType::AppleiPhone,
         name: String::from("Tester's phone"),
         multicast: std::net::SocketAddr::V4(SocketAddrV4::new(DISCOVERY_MULTICAST, 50692)),
-        p2p_addr: create_p2p_addr()
+        p2p_addr: create_p2p_addr(),
     };
     let (manager_b, mut rx_b) = P2pManager::new(config).await?;
 
@@ -51,7 +51,6 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     let b = manager_b.get_metadata();
     manager_a.add_known_peer(PeerCandidate::new(b, auth_b));
     manager_b.add_known_peer(PeerCandidate::new(a, auth_a));
-
 
     // node A sends presence request
     sleep(Duration::from_millis(100)).await;

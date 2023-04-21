@@ -1,16 +1,16 @@
-use std::{net::SocketAddr};
+use std::net::SocketAddr;
 
-use bytes::{BytesMut, BufMut, Buf};
-use num_enum::{TryFromPrimitive, IntoPrimitive};
-use tokio_util::codec::{Encoder, Decoder};
-use byteorder::{ReadBytesExt, BigEndian};
+use byteorder::{BigEndian, ReadBytesExt};
+use bytes::{Buf, BufMut, BytesMut};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+use tokio_util::codec::{Decoder, Encoder};
 
-
-use crate::{err, event, peer::{PeerMetadata, DeviceType, PeerId}};
-
+use crate::{
+    err, event,
+    peer::{DeviceType, PeerId, PeerMetadata},
+};
 
 pub(crate) const SIGNATURE: [u8; 2] = hex_literal::hex!("4040");
-
 
 // pub(crate) trait Length {
 //     fn get_length(&self) -> u16;
@@ -20,7 +20,6 @@ pub(crate) const SIGNATURE: [u8; 2] = hex_literal::hex!("4040");
 // rust custom derive macro
 
 pub struct DiscoveryCodec;
-
 
 impl Decoder for DiscoveryCodec {
     type Item = event::DiscoveryEvent;
@@ -51,30 +50,34 @@ impl Decoder for DiscoveryCodec {
                 let device_addr_str = String::from_utf8(device_addr_bytes.to_vec()).unwrap();
                 let device_addr: SocketAddr = device_addr_str.parse()?;
                 let device_type = DeviceType::try_from_primitive(device_type_raw)?;
-                
-                Ok(Some(event::DiscoveryEvent::PresenceResponse(PeerMetadata {
-                    typ: device_type,
-                    name: device_name,
-                    id,
-                    addr: device_addr
-                })))
-            },
-            x => Err(Self::Error::Enum(x.into()))
+
+                Ok(Some(event::DiscoveryEvent::PresenceResponse(
+                    PeerMetadata {
+                        typ: device_type,
+                        name: device_name,
+                        id,
+                        addr: device_addr,
+                    },
+                )))
+            }
+            x => Err(Self::Error::Enum(x.into())),
         }
-        
     }
 }
 
 impl Encoder<event::DiscoveryEvent> for DiscoveryCodec {
     type Error = err::ParseError;
 
-    fn encode(&mut self, item: event::DiscoveryEvent, dst: &mut BytesMut) -> Result<(), Self::Error> {        
-        
+    fn encode(
+        &mut self,
+        item: event::DiscoveryEvent,
+        dst: &mut BytesMut,
+    ) -> Result<(), Self::Error> {
         HeaderCodec.encode(Header::new(MessageType::Discovery, &item), dst)?;
         match item {
             event::DiscoveryEvent::PresenceRequest => {
                 dst.put_u8(0); // DiscoveryType
-            },
+            }
             event::DiscoveryEvent::PresenceResponse(metadata) => {
                 dst.put_u8(1); // DiscoveryType
                 dst.put_u16(metadata.typ.into()); // DeviceType
@@ -93,11 +96,11 @@ impl Encoder<event::DiscoveryEvent> for DiscoveryCodec {
 pub struct ConnectionCodec;
 
 pub enum Connection {
-    Request{id: PeerId, tag: Vec<u8>}, // sent by client
-    Response(Vec<u8>), // sent by host
-    CompleteRequest, // sent by client
-    CompleteResponse, // sent by host
-    Failure(u32) // sent by either on error
+    Request { id: PeerId, tag: Vec<u8> }, // sent by client
+    Response(Vec<u8>),                    // sent by host
+    CompleteRequest,                      // sent by client
+    CompleteResponse,                     // sent by host
+    Failure(u32),                         // sent by either on error
 }
 
 impl Frame for Connection {
@@ -107,12 +110,10 @@ impl Frame for Connection {
             Connection::Response(_) => 1 + 32,
             Connection::CompleteRequest => 1,
             Connection::CompleteResponse => 1,
-            Connection::Failure(_) => 1 + 4
+            Connection::Failure(_) => 1 + 4,
         }
     }
 }
-
-
 
 impl Decoder for ConnectionCodec {
     type Item = Connection;
@@ -131,26 +132,22 @@ impl Decoder for ConnectionCodec {
         match src.get_u8() {
             0 => {
                 let peer_id_raw = src.split_to(40);
-                let peer_id = PeerId::from_string(String::from_utf8(peer_id_raw.to_vec()).unwrap()).unwrap();
+                let peer_id =
+                    PeerId::from_string(String::from_utf8(peer_id_raw.to_vec()).unwrap()).unwrap();
                 let hmac = src.split_to(32).to_vec();
-                Ok(Some(Connection::Request { id: peer_id, tag: hmac }))
-            },
+                Ok(Some(Connection::Request {
+                    id: peer_id,
+                    tag: hmac,
+                }))
+            }
             1 => {
                 let hmac = src.split_to(32).to_vec();
                 Ok(Some(Connection::Response(hmac)))
-            },
-            2 => {
-                Ok(Some(Connection::CompleteRequest))
-            },
-            3 => {
-                Ok(Some(Connection::CompleteResponse))
-            },
-            4 => {
-                Ok(Some(Connection::Failure(src.get_u32())))
-            },
-            x => {
-                Err(Self::Error::Enum(x.into()))
             }
+            2 => Ok(Some(Connection::CompleteRequest)),
+            3 => Ok(Some(Connection::CompleteResponse)),
+            4 => Ok(Some(Connection::Failure(src.get_u32()))),
+            x => Err(Self::Error::Enum(x.into())),
         }
     }
 }
@@ -165,14 +162,14 @@ impl Encoder<Connection> for ConnectionCodec {
                 dst.put_u8(0);
                 dst.put(id.as_bytes());
                 dst.put(tag.as_ref());
-            },
+            }
             Connection::Response(tag) => {
                 dst.put_u8(1);
                 dst.put(tag.as_ref());
-            },
+            }
             Connection::CompleteRequest => {
                 dst.put_u8(2);
-            },
+            }
             Connection::CompleteResponse => {
                 dst.put_u8(3);
             }
@@ -185,10 +182,6 @@ impl Encoder<Connection> for ConnectionCodec {
     }
 }
 
-
-
-
-
 pub struct HeaderCodec;
 
 impl Decoder for HeaderCodec {
@@ -198,18 +191,16 @@ impl Decoder for HeaderCodec {
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if src.len() < 5 {
-            return Ok(None)
+            return Ok(None);
         }
 
         //let mut peek = Cursor::new(&src[..5]);
-
 
         // if !src.starts_with(&SIGNATURE) {
         //     return Err(HeaderError::NotAHeader);
         // }
 
         // let message_length = peek.get_u16();
-
 
         let Some(signature_raw) = src.get(0..2) else {
             return Ok(None)
@@ -237,11 +228,10 @@ impl Decoder for HeaderCodec {
         let message_type_raw = src.get_u8();
         let message_type = MessageType::try_from_primitive(message_type_raw)?;
 
-        Ok(Some(Header { 
-            length: message_length, 
-            message_type, 
+        Ok(Some(Header {
+            length: message_length,
+            message_type,
         }))
-    
     }
 }
 
@@ -252,7 +242,7 @@ impl Encoder<Header> for HeaderCodec {
         dst.put(&SIGNATURE[..]); // signature
         dst.put_u16(item.length); // message len
         dst.put_u8(item.message_type.into()); // message type
-        // dst.put_u64(item.request_id); // request id
+                                              // dst.put_u64(item.request_id); // request id
 
         Ok(())
     }
@@ -267,7 +257,7 @@ impl Header {
     pub fn new(typ: MessageType, item: &impl Frame) -> Header {
         let mut header = Header {
             message_type: typ,
-            length: item.len()
+            length: item.len(),
         };
         header.length += header.len();
         header
@@ -283,12 +273,12 @@ impl Frame for Header {
 #[derive(Copy, Clone, Debug, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 pub enum MessageType {
-    // None = 0, 
-    Discovery = 1, 
+    // None = 0,
+    Discovery = 1,
     Connect = 2,
-    // Control = 3, 
-    // Session = 4, 
-    // Ack = 5 
+    // Control = 3,
+    // Session = 4,
+    // Ack = 5
 }
 
 /// Each frame needs to know it's length before sending
@@ -299,22 +289,31 @@ pub trait Frame {
 #[cfg(test)]
 mod tests {
 
-    use std::{net::{SocketAddr, SocketAddrV4, Ipv4Addr}, fmt::Debug};
-    use bytes::{BytesMut, BufMut};
-    use tokio_util::codec::{Decoder, Encoder};
-    use crate::{event::DiscoveryEvent, peer::{PeerMetadata, PeerId}, proto::{ConnectionCodec, Connection}};
     use super::{DiscoveryCodec, SIGNATURE};
-
+    use crate::{
+        event::DiscoveryEvent,
+        peer::{PeerId, PeerMetadata},
+        proto::{Connection, ConnectionCodec},
+    };
+    use bytes::{BufMut, BytesMut};
+    use std::{
+        fmt::Debug,
+        net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    };
+    use tokio_util::codec::{Decoder, Encoder};
 
     fn consume<D>(decoder: &mut D, src: &mut BytesMut) -> Vec<Option<D::Item>>
-    where 
+    where
         D: Decoder,
-        D::Error: Debug {
+        D::Error: Debug,
+    {
         let mut result = Vec::new();
         loop {
             match decoder.decode(src) {
-                Ok(None) => { break; }
-                output => result.push(output.unwrap())
+                Ok(None) => {
+                    break;
+                }
+                output => result.push(output.unwrap()),
             }
         }
         result
@@ -327,8 +326,8 @@ mod tests {
 
         src.put(&SIGNATURE[..]);
         src.put_u16(6); // length
-        src.put_u8(1);  // type
-        src.put_u8(0);  // discovery type
+        src.put_u8(1); // type
+        src.put_u8(0); // discovery type
         let mut result = consume(&mut decoder, &mut src);
 
         assert_eq!(0, src.len());
@@ -345,10 +344,10 @@ mod tests {
 
         src.put(&SIGNATURE[..]);
         src.put_u16(76); // length
-        src.put_u8(1);  // type
-        src.put_u8(1);  // discovery type 
-        src.put_u16(6);  // device type
-        src.put_u16(10);  // device name length
+        src.put_u8(1); // type
+        src.put_u8(1); // discovery type
+        src.put_u16(6); // device type
+        src.put_u16(10); // device name length
         src.put(&b"test phone"[..]); // device name
         src.put(&b"0123456789012345678901234567890123456789"[..]); // device id
         src.put_u16(14); // address length
@@ -361,12 +360,16 @@ mod tests {
             panic!("invalid frame");
         };
 
-        assert_eq!(PeerMetadata {
-            name: "test phone".to_string(),
-            typ: crate::peer::DeviceType::AppleiPhone,
-            id: PeerId::from_string("0123456789012345678901234567890123456789".to_string()).unwrap(),
-            addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1),5001))
-        }, meta);
+        assert_eq!(
+            PeerMetadata {
+                name: "test phone".to_string(),
+                typ: crate::peer::DeviceType::AppleiPhone,
+                id: PeerId::from_string("0123456789012345678901234567890123456789".to_string())
+                    .unwrap(),
+                addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 5001))
+            },
+            meta
+        );
     }
 
     #[test]
@@ -393,10 +396,12 @@ mod tests {
         let mut dst = BytesMut::new();
 
         let item = DiscoveryEvent::PresenceResponse(PeerMetadata {
-            name: "test phone".to_string(), 
-            typ: crate::peer::DeviceType::AppleiPhone, 
-            id: PeerId::from_string("0123456789012345678901234567890123456789".to_string()).unwrap(), 
-            addr:  SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1),5001))});
+            name: "test phone".to_string(),
+            typ: crate::peer::DeviceType::AppleiPhone,
+            id: PeerId::from_string("0123456789012345678901234567890123456789".to_string())
+                .unwrap(),
+            addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 5001)),
+        });
 
         encoder.encode(item, &mut dst).expect("Error Encoding");
         // assert_eq!(dst, BytesMut::from(&hex!("")[..]))
@@ -408,12 +413,16 @@ mod tests {
             panic!("invalid frame");
         };
 
-        assert_eq!(PeerMetadata {
-            name: "test phone".to_string(),
-            typ: crate::peer::DeviceType::AppleiPhone,
-            id: PeerId::from_string("0123456789012345678901234567890123456789".to_string()).unwrap(),
-            addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1),5001))
-        }, meta);
+        assert_eq!(
+            PeerMetadata {
+                name: "test phone".to_string(),
+                typ: crate::peer::DeviceType::AppleiPhone,
+                id: PeerId::from_string("0123456789012345678901234567890123456789".to_string())
+                    .unwrap(),
+                addr: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 5001))
+            },
+            meta
+        );
     }
 
     #[test]
@@ -423,8 +432,8 @@ mod tests {
 
         src.put(&SIGNATURE[..]);
         src.put_u16(73 + 5); // length
-        src.put_u8(2);  // type
-        src.put_u8(0);  // connect type 
+        src.put_u8(2); // type
+        src.put_u8(0); // connect type
         src.put(&b"0123456789012345678901234567890123456789"[..]); // peer id
         src.put(&b"0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT"[..]); // hmac
         let mut result = consume(&mut decoder, &mut src);
@@ -435,7 +444,10 @@ mod tests {
             panic!("invalid frame");
         };
         assert_eq!("0123456789012345678901234567890123456789", id.to_string());
-        assert_eq!("0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT", String::from_utf8(tag).unwrap());
+        assert_eq!(
+            "0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT",
+            String::from_utf8(tag).unwrap()
+        );
     }
 
     #[test]
@@ -445,8 +457,8 @@ mod tests {
 
         src.put(&SIGNATURE[..]);
         src.put_u16(33 + 5); // length
-        src.put_u8(2);  // type
-        src.put_u8(1);  // connect type 
+        src.put_u8(2); // type
+        src.put_u8(1); // connect type
         src.put(&b"0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT"[..]); // hmac
         let mut result = consume(&mut decoder, &mut src);
 
@@ -455,7 +467,10 @@ mod tests {
         let Some(Some(Connection::Response(tag))) = result.pop() else {
             panic!("invalid frame");
         };
-        assert_eq!("0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT", String::from_utf8(tag).unwrap());
+        assert_eq!(
+            "0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT",
+            String::from_utf8(tag).unwrap()
+        );
     }
 
     #[test]
@@ -465,8 +480,8 @@ mod tests {
 
         src.put(&SIGNATURE[..]);
         src.put_u16(1 + 5); // length
-        src.put_u8(2);  // type
-        src.put_u8(2);  // connect type 
+        src.put_u8(2); // type
+        src.put_u8(2); // connect type
         let mut result = consume(&mut decoder, &mut src);
 
         assert_eq!(0, src.len());
@@ -483,8 +498,8 @@ mod tests {
 
         src.put(&SIGNATURE[..]);
         src.put_u16(1 + 5); // length
-        src.put_u8(2);  // type
-        src.put_u8(3);  // connect type 
+        src.put_u8(2); // type
+        src.put_u8(3); // connect type
         let mut result = consume(&mut decoder, &mut src);
 
         assert_eq!(0, src.len());
@@ -501,8 +516,8 @@ mod tests {
 
         src.put(&SIGNATURE[..]);
         src.put_u16(5 + 5); // length
-        src.put_u8(2);  // type
-        src.put_u8(4);  // connect type 
+        src.put_u8(2); // type
+        src.put_u8(4); // connect type
         src.put_u32(2001); // result
         let mut result = consume(&mut decoder, &mut src);
 
@@ -520,8 +535,9 @@ mod tests {
         let mut dst = BytesMut::new();
 
         let item = Connection::Request {
-            id: PeerId::from_string("0123456789012345678901234567890123456789".to_string()).unwrap(), 
-            tag: Vec::from(&b"0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT"[..]) 
+            id: PeerId::from_string("0123456789012345678901234567890123456789".to_string())
+                .unwrap(),
+            tag: Vec::from(&b"0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT"[..]),
         };
         encoder.encode(item, &mut dst).expect("Error Encoding");
         // assert_eq!(dst, BytesMut::from(&hex!("")[..]))
@@ -533,7 +549,10 @@ mod tests {
             panic!("invalid frame");
         };
         assert_eq!("0123456789012345678901234567890123456789", id.to_string());
-        assert_eq!("0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT", String::from_utf8(tag).unwrap());
+        assert_eq!(
+            "0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT",
+            String::from_utf8(tag).unwrap()
+        );
     }
 
     #[test]
@@ -551,7 +570,10 @@ mod tests {
         let Some(Some(Connection::Response(tag))) = result.pop() else {
             panic!("invalid frame");
         };
-        assert_eq!("0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT", String::from_utf8(tag).unwrap());
+        assert_eq!(
+            "0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT",
+            String::from_utf8(tag).unwrap()
+        );
     }
 
     #[test]

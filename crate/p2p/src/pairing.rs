@@ -1,20 +1,19 @@
-use std::{str::FromStr};
+use std::str::FromStr;
 
-use totp_rs::{TOTP, Secret};
+use totp_rs::{Secret, TOTP};
 
 use crate::err;
-
 
 pub struct Png(String);
 
 #[derive(Debug, Clone)]
 pub struct PairingAuthenticator {
-    totp: TOTP
+    totp: TOTP,
 }
 
 impl PairingAuthenticator {
     pub fn new(secret: Vec<u8>) -> Result<Self, err::PairingError> {
-        Ok(Self { 
+        Ok(Self {
             totp: TOTP::new(
                 totp_rs::Algorithm::SHA256,
                 8,
@@ -22,11 +21,15 @@ impl PairingAuthenticator {
                 15,
                 secret,
                 None,
-                "airbox-client".to_string())?})
+                "airbox-client".to_string(),
+            )?,
+        })
     }
 
     pub fn from_url<S: AsRef<str>>(url: S) -> Result<Self, err::PairingError> {
-        Ok(Self { totp: TOTP::from_url(url)? })
+        Ok(Self {
+            totp: TOTP::from_url(url)?,
+        })
     }
 
     pub fn to_qr_code(&self) -> Result<Png, err::PairingError> {
@@ -54,6 +57,10 @@ impl FromStr for PairingAuthenticator {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let secret_b32 = Secret::Encoded(String::from(s));
-        Self::new(secret_b32.to_bytes().map_err(|e| Self::Err::Secret(format!("{:?}", e)))?)
+        Self::new(
+            secret_b32
+                .to_bytes()
+                .map_err(|e| Self::Err::Secret(format!("{:?}", e)))?,
+        )
     }
 }
