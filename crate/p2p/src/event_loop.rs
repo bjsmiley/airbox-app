@@ -37,7 +37,7 @@ pub(crate) async fn p2p_event_loop(
                 }
             },
             internal_event = internal_channel.recv() => {
-                let Some(event) = internal_event else {
+                let Some(_) = internal_event else {
                     debug!("App stopped sending main event loop messages");
                     break;
                 };

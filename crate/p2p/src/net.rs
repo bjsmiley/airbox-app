@@ -5,7 +5,7 @@ use tokio::{net::TcpStream, time::timeout};
 use tokio_util::codec::Framed;
 use tracing::{debug, error};
 
-use crate::{err, peer::{Peer, PeerCandidate}, proto::{ConnectCodec, Connect}, hmac, pairing::PairingAuthenticator, manager::P2pManager};
+use crate::{err, peer::{Peer, PeerCandidate}, proto::{ConnectCodec, Connect}, hmac, manager::P2pManager};
 
 const TIMEOUT_ERR: u32 = 2001;
 const NOT_FOUND_ERR: u32 = 2002;

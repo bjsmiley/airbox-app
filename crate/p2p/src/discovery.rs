@@ -1,4 +1,4 @@
-use std::{net::{SocketAddr, SocketAddrV4, Ipv4Addr}};
+use std::{net::{SocketAddr, Ipv4Addr}};
 use tokio::{sync::mpsc, net::UdpSocket};
 use tokio_util::udp::UdpFramed;
 use futures::{StreamExt, SinkExt};
@@ -8,14 +8,6 @@ use crate::{event::DiscoveryEvent, proto::DiscoveryCodec};
 
 pub static DISCOVERY_MULTICAST: Ipv4Addr = Ipv4Addr::new(239, 255, 42, 98);
 
-
-
-
-/*
-    let addr = Ipv4Addr::UNSPECIFIED;
-    let multi_addr: Ipv4Addr = "239.255.42.98".parse()?;
-    let port = 50692;
- */
 pub fn multicast(addr: &SocketAddr, multi_addr: &SocketAddr) -> Result<(UdpSocket, SocketAddr), std::io::Error> {
     
     use socket2::{Domain, Type, Protocol, Socket};

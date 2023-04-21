@@ -317,7 +317,7 @@ mod tests {
                 output => result.push(output.unwrap())
             }
         }
-        return result;
+        result
     }
 
     #[test]

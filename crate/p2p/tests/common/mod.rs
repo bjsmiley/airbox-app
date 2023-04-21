@@ -1,16 +1,6 @@
-use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
+use std::net::{SocketAddr, SocketAddrV4};
 
 use ab_p2p::peer::PeerId;
-
-
-
-// pub fn create_discovery_addr() -> (SocketAddr, Ipv4Addr) {
-
-//     let multicast = Ipv4Addr::new(239,255,42,99);
-//     assert_eq!(true, multicast.is_multicast());
-//     let addr = SocketAddr::V4(SocketAddrV4::new("192.168.88.231".parse().unwrap(), 0));
-//     (addr, multicast)
-// }
 
 pub fn create_p2p_addr() -> SocketAddr {
     let addr = SocketAddr::V4(SocketAddrV4::new("127.0.0.1".parse().unwrap(), 0));
