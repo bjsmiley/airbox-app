@@ -154,7 +154,7 @@ impl P2pManager {
     /// called by a connected peer's connection handler when closing
     pub(crate) fn peer_disconnected(self: &Arc<Self>, id: &PeerId) {
         self.connected_peers.remove(id);
-        if let Err(_) = self.app_channel.send(AppEvent::PeerDisconnected(id.clone())) {
+        if self.app_channel.send(AppEvent::PeerDisconnected(id.clone())).is_err() {
             error!("failed to send PeerDisconnected event to the application");
         }
     }
@@ -195,7 +195,7 @@ impl P2pManager {
                 self.discovered_peers.insert(id.clone(), candidate.clone());
                 self.known_peers.insert(id, candidate.clone());
                 debug!("discovered peer is recorded");
-                if let Err(_) = self.app_channel.send(AppEvent::PeerDiscovered(candidate.metadata)) {
+                if self.app_channel.send(AppEvent::PeerDiscovered(candidate.metadata)).is_err() {
                     error!("failed to send PeerDiscovered event to the application");
                 };
             }
@@ -214,7 +214,7 @@ impl P2pManager {
     pub(crate) fn handle_new_connection(&self, peer: Peer) {
         let id = peer.id.clone();
         self.connected_peers.insert(id);
-        if let Err(_) = self.app_channel.send(AppEvent::PeerConnected(peer)) {
+        if self.app_channel.send(AppEvent::PeerConnected(peer)).is_err() {
             error!("failed to send PeerConnected event to the application");
         };
     }

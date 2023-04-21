@@ -15,6 +15,8 @@ pub(crate) fn verify(key: &[u8], data: &[u8], hmac: &[u8]) -> Result<(),error::U
 #[cfg(test)]
 mod tests {
 
+    use super::{sign, verify};
+
     #[test]
     fn hmac_peer_id_auth_code() -> Result<(), Box<dyn std::error::Error>> {
         let secret = String::from("QWERTYUIOPQWERTYUIOPQWERTYUIOPQWERTYUIOP");
@@ -24,8 +26,8 @@ mod tests {
         let totp = totp_rs::Secret::Encoded(secret).to_bytes().unwrap();
         let auth = crate::pairing::PairingAuthenticator::new(totp)?;
         let code = auth.generate()?;
-        let tag = super::sign(code.as_bytes(), peer);
-        assert_eq!((), super::verify(code.as_bytes(), peer, tag.as_ref()).unwrap());
+        let tag = sign(code.as_bytes(), peer);
+        assert!(verify(code.as_bytes(), peer, tag.as_ref()).is_ok());
         Ok(())
     }
 }

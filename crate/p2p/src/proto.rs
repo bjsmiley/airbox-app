@@ -90,32 +90,32 @@ impl Encoder<event::DiscoveryEvent> for DiscoveryCodec {
     }
 }
 
-pub struct ConnectCodec;
+pub struct ConnectionCodec;
 
-pub enum Connect {
-    ConnectRequest{id: PeerId, tag: Vec<u8>}, // sent by client
-    ConnectionResponse(Vec<u8>), // sent by host
-    ConnectionCompleteRequest, // sent by client
-    ConnectionCompleteResponse, // sent by host
-    ConnectionFailure(u32) // sent by either on error
+pub enum Connection {
+    Request{id: PeerId, tag: Vec<u8>}, // sent by client
+    Response(Vec<u8>), // sent by host
+    CompleteRequest, // sent by client
+    CompleteResponse, // sent by host
+    Failure(u32) // sent by either on error
 }
 
-impl Frame for Connect {
+impl Frame for Connection {
     fn len(&self) -> u16 {
         match self {
-            Connect::ConnectRequest { .. } => 1 + 40 + 32,
-            Connect::ConnectionResponse(_) => 1 + 32,
-            Connect::ConnectionCompleteRequest => 1,
-            Connect::ConnectionCompleteResponse => 1,
-            Connect::ConnectionFailure(_) => 1 + 4
+            Connection::Request { .. } => 1 + 40 + 32,
+            Connection::Response(_) => 1 + 32,
+            Connection::CompleteRequest => 1,
+            Connection::CompleteResponse => 1,
+            Connection::Failure(_) => 1 + 4
         }
     }
 }
 
 
 
-impl Decoder for ConnectCodec {
-    type Item = Connect;
+impl Decoder for ConnectionCodec {
+    type Item = Connection;
 
     type Error = err::ParseError;
 
@@ -133,20 +133,20 @@ impl Decoder for ConnectCodec {
                 let peer_id_raw = src.split_to(40);
                 let peer_id = PeerId::from_string(String::from_utf8(peer_id_raw.to_vec()).unwrap()).unwrap();
                 let hmac = src.split_to(32).to_vec();
-                Ok(Some(Connect::ConnectRequest { id: peer_id, tag: hmac }))
+                Ok(Some(Connection::Request { id: peer_id, tag: hmac }))
             },
             1 => {
                 let hmac = src.split_to(32).to_vec();
-                Ok(Some(Connect::ConnectionResponse(hmac)))
+                Ok(Some(Connection::Response(hmac)))
             },
             2 => {
-                Ok(Some(Connect::ConnectionCompleteRequest))
+                Ok(Some(Connection::CompleteRequest))
             },
             3 => {
-                Ok(Some(Connect::ConnectionCompleteResponse))
+                Ok(Some(Connection::CompleteResponse))
             },
             4 => {
-                Ok(Some(Connect::ConnectionFailure(src.get_u32())))
+                Ok(Some(Connection::Failure(src.get_u32())))
             },
             x => {
                 Err(Self::Error::Enum(x.into()))
@@ -155,28 +155,28 @@ impl Decoder for ConnectCodec {
     }
 }
 
-impl Encoder<Connect> for ConnectCodec {
+impl Encoder<Connection> for ConnectionCodec {
     type Error = err::ParseError;
 
-    fn encode(&mut self, item: Connect, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Connection, dst: &mut BytesMut) -> Result<(), Self::Error> {
         HeaderCodec.encode(Header::new(MessageType::Connect, &item), dst)?;
         match item {
-            Connect::ConnectRequest { id, tag } => {
+            Connection::Request { id, tag } => {
                 dst.put_u8(0);
                 dst.put(id.as_bytes());
                 dst.put(tag.as_ref());
             },
-            Connect::ConnectionResponse(tag) => {
+            Connection::Response(tag) => {
                 dst.put_u8(1);
                 dst.put(tag.as_ref());
             },
-            Connect::ConnectionCompleteRequest => {
+            Connection::CompleteRequest => {
                 dst.put_u8(2);
             },
-            Connect::ConnectionCompleteResponse => {
+            Connection::CompleteResponse => {
                 dst.put_u8(3);
             }
-            Connect::ConnectionFailure(code) => {
+            Connection::Failure(code) => {
                 dst.put_u8(4);
                 dst.put_u32(code);
             }
@@ -302,7 +302,7 @@ mod tests {
     use std::{net::{SocketAddr, SocketAddrV4, Ipv4Addr}, fmt::Debug};
     use bytes::{BytesMut, BufMut};
     use tokio_util::codec::{Decoder, Encoder};
-    use crate::{event::DiscoveryEvent, peer::{PeerMetadata, PeerId}, proto::{ConnectCodec, Connect}};
+    use crate::{event::DiscoveryEvent, peer::{PeerMetadata, PeerId}, proto::{ConnectionCodec, Connection}};
     use super::{DiscoveryCodec, SIGNATURE};
 
 
@@ -418,7 +418,7 @@ mod tests {
 
     #[test]
     fn decode_connect_request() {
-        let mut decoder = ConnectCodec;
+        let mut decoder = ConnectionCodec;
         let mut src = BytesMut::new();
 
         src.put(&SIGNATURE[..]);
@@ -431,7 +431,7 @@ mod tests {
 
         assert_eq!(0, src.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectRequest { id, tag })) = result.pop() else {
+        let Some(Some(Connection::Request { id, tag })) = result.pop() else {
             panic!("invalid frame");
         };
         assert_eq!("0123456789012345678901234567890123456789", id.to_string());
@@ -440,7 +440,7 @@ mod tests {
 
     #[test]
     fn decode_connect_response() {
-        let mut decoder = ConnectCodec;
+        let mut decoder = ConnectionCodec;
         let mut src = BytesMut::new();
 
         src.put(&SIGNATURE[..]);
@@ -452,7 +452,7 @@ mod tests {
 
         assert_eq!(0, src.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectionResponse(tag ))) = result.pop() else {
+        let Some(Some(Connection::Response(tag))) = result.pop() else {
             panic!("invalid frame");
         };
         assert_eq!("0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT", String::from_utf8(tag).unwrap());
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn decode_connect_complete_request() {
-        let mut decoder = ConnectCodec;
+        let mut decoder = ConnectionCodec;
         let mut src = BytesMut::new();
 
         src.put(&SIGNATURE[..]);
@@ -471,14 +471,14 @@ mod tests {
 
         assert_eq!(0, src.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectionCompleteRequest)) = result.pop() else {
+        let Some(Some(Connection::CompleteRequest)) = result.pop() else {
             panic!("invalid frame");
         };
     }
 
     #[test]
     fn decode_connect_complete_response() {
-        let mut decoder = ConnectCodec;
+        let mut decoder = ConnectionCodec;
         let mut src = BytesMut::new();
 
         src.put(&SIGNATURE[..]);
@@ -489,14 +489,14 @@ mod tests {
 
         assert_eq!(0, src.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectionCompleteResponse)) = result.pop() else {
+        let Some(Some(Connection::CompleteResponse)) = result.pop() else {
             panic!("invalid frame");
         };
     }
 
     #[test]
     fn decode_connect_failure() {
-        let mut decoder = ConnectCodec;
+        let mut decoder = ConnectionCodec;
         let mut src = BytesMut::new();
 
         src.put(&SIGNATURE[..]);
@@ -508,7 +508,7 @@ mod tests {
 
         assert_eq!(0, src.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectionFailure(code))) = result.pop() else {
+        let Some(Some(Connection::Failure(code))) = result.pop() else {
             panic!("invalid frame");
         };
         assert_eq!(2001, code);
@@ -516,10 +516,10 @@ mod tests {
 
     #[test]
     fn encode_connect_request() {
-        let mut encoder = ConnectCodec;
+        let mut encoder = ConnectionCodec;
         let mut dst = BytesMut::new();
 
-        let item = Connect::ConnectRequest {
+        let item = Connection::Request {
             id: PeerId::from_string("0123456789012345678901234567890123456789".to_string()).unwrap(), 
             tag: Vec::from(&b"0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT"[..]) 
         };
@@ -529,7 +529,7 @@ mod tests {
         let mut result = consume(&mut encoder, &mut dst);
         assert_eq!(0, dst.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectRequest { id, tag })) = result.pop() else {
+        let Some(Some(Connection::Request { id, tag })) = result.pop() else {
             panic!("invalid frame");
         };
         assert_eq!("0123456789012345678901234567890123456789", id.to_string());
@@ -538,17 +538,17 @@ mod tests {
 
     #[test]
     fn encode_connect_response() {
-        let mut encoder = ConnectCodec;
+        let mut encoder = ConnectionCodec;
         let mut dst = BytesMut::new();
 
-        let item = Connect::ConnectionResponse(Vec::from(&b"0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT"[..]));
+        let item = Connection::Response(Vec::from(&b"0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT"[..]));
         encoder.encode(item, &mut dst).expect("Error Encoding");
         // assert_eq!(dst, BytesMut::from(&hex!("")[..]))
 
         let mut result = consume(&mut encoder, &mut dst);
         assert_eq!(0, dst.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectionResponse(tag))) = result.pop() else {
+        let Some(Some(Connection::Response(tag))) = result.pop() else {
             panic!("invalid frame");
         };
         assert_eq!("0TQEnaM5YHPJ8LJ2KD32bTGdnfK23ScT", String::from_utf8(tag).unwrap());
@@ -556,51 +556,51 @@ mod tests {
 
     #[test]
     fn encode_connect_completed_request() {
-        let mut encoder = ConnectCodec;
+        let mut encoder = ConnectionCodec;
         let mut dst = BytesMut::new();
 
-        let item = Connect::ConnectionCompleteRequest;
+        let item = Connection::CompleteRequest;
         encoder.encode(item, &mut dst).expect("Error Encoding");
         // assert_eq!(dst, BytesMut::from(&hex!("")[..]))
 
         let mut result = consume(&mut encoder, &mut dst);
         assert_eq!(0, dst.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectionCompleteRequest)) = result.pop() else {
+        let Some(Some(Connection::CompleteRequest)) = result.pop() else {
             panic!("invalid frame");
         };
     }
 
     #[test]
     fn encode_connect_completed_response() {
-        let mut encoder = ConnectCodec;
+        let mut encoder = ConnectionCodec;
         let mut dst = BytesMut::new();
 
-        let item = Connect::ConnectionCompleteResponse;
+        let item = Connection::CompleteResponse;
         encoder.encode(item, &mut dst).expect("Error Encoding");
         // assert_eq!(dst, BytesMut::from(&hex!("")[..]))
 
         let mut result = consume(&mut encoder, &mut dst);
         assert_eq!(0, dst.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectionCompleteResponse)) = result.pop() else {
+        let Some(Some(Connection::CompleteResponse)) = result.pop() else {
             panic!("invalid frame");
         };
     }
 
     #[test]
     fn encode_connect_failure() {
-        let mut encoder = ConnectCodec;
+        let mut encoder = ConnectionCodec;
         let mut dst = BytesMut::new();
 
-        let item = Connect::ConnectionFailure(2001);
+        let item = Connection::Failure(2001);
         encoder.encode(item, &mut dst).expect("Error Encoding");
         // assert_eq!(dst, BytesMut::from(&hex!("")[..]))
 
         let mut result = consume(&mut encoder, &mut dst);
         assert_eq!(0, dst.len());
         assert_eq!(1, result.len());
-        let Some(Some(Connect::ConnectionFailure(code))) = result.pop() else {
+        let Some(Some(Connection::Failure(code))) = result.pop() else {
             panic!("invalid frame");
         };
         assert_eq!(2001, code);

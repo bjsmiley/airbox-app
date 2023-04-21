@@ -21,11 +21,8 @@ pub fn multicast(addr: &SocketAddr, multi_addr: &SocketAddr) -> Result<(UdpSocke
     socket.set_reuse_address(true)?;
     socket.bind(&socket2::SockAddr::from(*addr))?;
     socket.set_multicast_loop_v4(true)?;
-    match (addr, multi_addr) {
-        (SocketAddr::V4(a), SocketAddr::V4(m)) => {
-            socket.join_multicast_v4(m.ip(), a.ip())?
-        }
-        _ => {}
+    if let (SocketAddr::V4(a), SocketAddr::V4(m)) = (addr, multi_addr) {
+        socket.join_multicast_v4(m.ip(), a.ip())?
     }
     socket.set_nonblocking(true)?;
     Ok((UdpSocket::from_std(socket.into())?, *multi_addr))
@@ -83,7 +80,7 @@ pub fn start(sock: UdpSocket, addr: SocketAddr) -> (mpsc::Sender<DiscoveryEvent>
                                     }
                                 }
                                 debug!("Recieved Discovery event");
-                                if let Err(_) = transport_tx.send(frame).await {
+                                if (transport_tx.send(frame).await).is_err() {
                                     debug!("Discovery shutting down. Transport Sender closed.");
                                     break;
                                 }
