@@ -30,7 +30,7 @@ impl PairingAuthenticator {
     }
 
     pub fn to_qr_code(&self) -> Result<Png, err::PairingError> {
-        let png = self.totp.get_qr().map_err(|e| err::PairingError::QrCode(e))?;
+        let png = self.totp.get_qr().map_err(err::PairingError::QrCode)?;
         Ok(Png(png))
     }
 

@@ -61,7 +61,7 @@ impl P2pManager {
         };
 
         // setup tcp listener
-        let listener = TcpListener::bind(config.p2p_addr.clone()).await?;
+        let listener = TcpListener::bind(config.p2p_addr).await?;
         debug!("Peer {} listening on {}", config.id.clone(), listener.local_addr()?);
 
         // setup metadata
@@ -138,7 +138,7 @@ impl P2pManager {
                 }
                 Ok(conn) => {
                     debug!("Attempting to connect to {:?}", addr);
-                    let peer = crate::net::connect(&self, conn, &candidate).await?;
+                    let peer = crate::net::connect(self, conn, &candidate).await?;
                     self.connected_peers.insert(id.clone());
                     return Ok(peer);
                 }
@@ -191,14 +191,13 @@ impl P2pManager {
                     addrs: HashSet::new(),
                     auth: known.1.auth
                 };
-                candidate.addrs.insert(peer.addr.clone());
+                candidate.addrs.insert(peer.addr);
                 self.discovered_peers.insert(id.clone(), candidate.clone());
                 self.known_peers.insert(id, candidate.clone());
                 debug!("discovered peer is recorded");
                 if let Err(_) = self.app_channel.send(AppEvent::PeerDiscovered(candidate.metadata)) {
                     error!("failed to send PeerDiscovered event to the application");
                 };
-                return;
             }
         }
     }
@@ -214,7 +213,7 @@ impl P2pManager {
     /// event loop calls this to inform manager a peer is now connected
     pub(crate) fn handle_new_connection(&self, peer: Peer) {
         let id = peer.id.clone();
-        self.connected_peers.insert(id.clone());
+        self.connected_peers.insert(id);
         if let Err(_) = self.app_channel.send(AppEvent::PeerConnected(peer)) {
             error!("failed to send PeerConnected event to the application");
         };

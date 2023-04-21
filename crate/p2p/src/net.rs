@@ -33,7 +33,7 @@ pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &P
     match response {
         None => {
             error!("peer closed the connection");
-            return Err(err::HandshakeError::Disconnect);
+            Err(err::HandshakeError::Disconnect)
         }
         Some(res) => {
             match res? {
@@ -58,27 +58,27 @@ pub(crate) async fn connect(manager: &Arc<P2pManager>, conn: TcpStream, peer: &P
                                     let connected = Peer::new(manager, crate::peer::ConnectionType::Client,
                                          frame.into_inner(), peer.metadata.clone()).unwrap();
                                     debug!("Peer is connected!");
-                                    return Ok(connected);
+                                    Ok(connected)
                                 }
                                 _ => {
                                     error!("peer recieved the wrong message instead of ConnectionCompleteResponse");
-                                    return Err(err::HandshakeError::Msg);
+                                    Err(err::HandshakeError::Msg)
                                 }
                             }
                         },
                         None => {
                             error!("peer closed the connection");
-                            return Err(err::HandshakeError::Disconnect);
+                            Err(err::HandshakeError::Disconnect)
                         },
                     }
                 },
                 Connect::ConnectionFailure(code) => {
                     error!("received error {} instead of ConnectionResponse", code);
-                    return Err(err::HandshakeError::Failure(code));
+                    Err(err::HandshakeError::Failure(code))
                 }
                 _ => {
                     error!("peer recieved the wrong message instead of ConnectionResponse");
-                    return Err(err::HandshakeError::Msg);
+                    Err(err::HandshakeError::Msg)
                 }
             }
         }
@@ -100,7 +100,7 @@ pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result
     match request {
         None => {
             error!("peer closed the connection");
-            return Err(err::HandshakeError::Disconnect);
+            Err(err::HandshakeError::Disconnect)
         },
         Some(req) => {
             match req? {
@@ -135,27 +135,27 @@ pub(crate) async fn accept(manager: &Arc<P2pManager>, conn: TcpStream) -> Result
                                     let connected = Peer::new(manager, crate::peer::ConnectionType::Server, 
                                      frame.into_inner(), peer.metadata).unwrap();
                                     debug!("Peer is connected!");
-                                    return Ok(connected);
+                                    Ok(connected)
                                 }
                                 _ => {
                                     error!("peer recieved the wrong message instead of ConnectionCompleteRequest");
-                                    return Err(err::HandshakeError::Msg);
+                                    Err(err::HandshakeError::Msg)
                                 }
                             }
                         }
                         None => {
                             error!("peer closed the connection");
-                            return Err(err::HandshakeError::Disconnect);
+                            Err(err::HandshakeError::Disconnect)
                         },
                     }
                 },
                 Connect::ConnectionFailure(code) => {
                     error!("received error {} instead of ConnectionRequest", code);
-                    return Err(err::HandshakeError::Failure(code));
+                    Err(err::HandshakeError::Failure(code))
                 },
                 _ => {
                     error!("peer recieved the wrong message instead of ConnectionRequest");
-                    return Err(err::HandshakeError::Msg);
+                    Err(err::HandshakeError::Msg)
                 }
             }
         }

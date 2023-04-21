@@ -19,7 +19,7 @@ pub fn multicast(addr: &SocketAddr, multi_addr: &SocketAddr) -> Result<(UdpSocke
         Some(Protocol::UDP),
     )?;
     socket.set_reuse_address(true)?;
-    socket.bind(&socket2::SockAddr::from(addr.clone()))?;
+    socket.bind(&socket2::SockAddr::from(*addr))?;
     socket.set_multicast_loop_v4(true)?;
     match (addr, multi_addr) {
         (SocketAddr::V4(a), SocketAddr::V4(m)) => {

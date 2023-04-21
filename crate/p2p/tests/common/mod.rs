@@ -3,8 +3,8 @@ use std::net::{SocketAddr, SocketAddrV4};
 use ab_p2p::peer::PeerId;
 
 pub fn create_p2p_addr() -> SocketAddr {
-    let addr = SocketAddr::V4(SocketAddrV4::new("127.0.0.1".parse().unwrap(), 0));
-    addr
+    
+    SocketAddr::V4(SocketAddrV4::new("127.0.0.1".parse().unwrap(), 0))
 }
 
 pub fn create_peer_id_one() -> PeerId {
