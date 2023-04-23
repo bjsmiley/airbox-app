@@ -1,6 +1,6 @@
 use std::net::{SocketAddr, SocketAddrV4};
 
-use ab_p2p::peer::PeerId;
+use p2p::peer::PeerId;
 
 pub fn create_p2p_addr() -> SocketAddr {
     SocketAddr::V4(SocketAddrV4::new("127.0.0.1".parse().unwrap(), 0))

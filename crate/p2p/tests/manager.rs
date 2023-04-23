@@ -1,6 +1,6 @@
 use std::{error::Error, net::SocketAddrV4, time::Duration};
 
-use ab_p2p::{
+use p2p::{
     discovery::DISCOVERY_MULTICAST,
     event::AppEvent,
     manager::{P2pConfig, P2pManager},
@@ -29,7 +29,7 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     // node A setup
     let config = P2pConfig {
         id: create_peer_id_one(),
-        device: ab_p2p::peer::DeviceType::Windows10Desktop,
+        device: p2p::peer::DeviceType::Windows10Desktop,
         name: String::from("Tester's laptop"),
         multicast: std::net::SocketAddr::V4(SocketAddrV4::new(DISCOVERY_MULTICAST, 50692)),
         p2p_addr: create_p2p_addr(),
@@ -39,7 +39,7 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     // node B setup
     let config = P2pConfig {
         id: create_peer_id_two(),
-        device: ab_p2p::peer::DeviceType::AppleiPhone,
+        device: p2p::peer::DeviceType::AppleiPhone,
         name: String::from("Tester's phone"),
         multicast: std::net::SocketAddr::V4(SocketAddrV4::new(DISCOVERY_MULTICAST, 50692)),
         p2p_addr: create_p2p_addr(),
