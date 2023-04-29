@@ -21,7 +21,7 @@ impl PairingAuthenticator {
                 15,
                 secret,
                 None,
-                "airbox-client".to_string(),
+                "flydrop-client".to_string(),
             )?,
         })
     }

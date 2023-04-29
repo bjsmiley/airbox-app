@@ -1,9 +1,13 @@
-use std::net::{SocketAddr, SocketAddrV4};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use p2p::peer::PeerId;
+use p2p::{discovery::DISCOVERY_MULTICAST, peer::PeerId};
 
 pub fn create_p2p_addr() -> SocketAddr {
-    SocketAddr::V4(SocketAddrV4::new("127.0.0.1".parse().unwrap(), 0))
+    SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
+}
+
+pub fn create_multicast_addr() -> SocketAddr {
+    SocketAddr::V4(SocketAddrV4::new(DISCOVERY_MULTICAST, 50692))
 }
 
 pub fn create_peer_id_one() -> PeerId {

@@ -45,7 +45,7 @@ pub struct P2pManager {
     internal_channel: mpsc::UnboundedSender<InternalEvent>,
 
     /// app_channel is a channel which is used to communicate with the application
-    app_channel: mpsc::UnboundedSender<AppEvent>,
+    app_channel: mpsc::UnboundedSender<P2pEvent>,
 }
 
 pub struct P2pConfig {
@@ -59,7 +59,7 @@ pub struct P2pConfig {
 impl P2pManager {
     pub async fn new(
         config: P2pConfig,
-    ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<AppEvent>), err::InitError> {
+    ) -> Result<(Arc<Self>, mpsc::UnboundedReceiver<P2pEvent>), err::InitError> {
         let discover = {
             // use LOCALHOST or UNSPECIFICED?
             let local = SocketAddr::V4(SocketAddrV4::new(
@@ -177,7 +177,7 @@ impl P2pManager {
         self.connected_peers.remove(id);
         if self
             .app_channel
-            .send(AppEvent::PeerDisconnected(id.clone()))
+            .send(P2pEvent::PeerDisconnected(id.clone()))
             .is_err()
         {
             error!("failed to send PeerDisconnected event to the application");
@@ -217,7 +217,7 @@ impl P2pManager {
                 debug!("discovered peer is recorded");
                 if self
                     .app_channel
-                    .send(AppEvent::PeerDiscovered(candidate.metadata))
+                    .send(P2pEvent::PeerDiscovered(candidate.metadata))
                     .is_err()
                 {
                     error!("failed to send PeerDiscovered event to the application");
@@ -244,7 +244,7 @@ impl P2pManager {
         self.connected_peers.insert(id);
         if self
             .app_channel
-            .send(AppEvent::PeerConnected(peer))
+            .send(P2pEvent::PeerConnected(peer))
             .is_err()
         {
             error!("failed to send PeerConnected event to the application");

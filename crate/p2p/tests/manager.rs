@@ -1,8 +1,7 @@
 use std::{error::Error, net::SocketAddrV4, time::Duration};
 
 use p2p::{
-    discovery::DISCOVERY_MULTICAST,
-    event::AppEvent,
+    event::P2pEvent,
     manager::{P2pConfig, P2pManager},
     pairing::PairingAuthenticator,
     peer::{ConnectionType, PeerCandidate},
@@ -31,7 +30,7 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
         id: create_peer_id_one(),
         device: p2p::peer::DeviceType::Windows10Desktop,
         name: String::from("Tester's laptop"),
-        multicast: std::net::SocketAddr::V4(SocketAddrV4::new(DISCOVERY_MULTICAST, 50692)),
+        multicast: create_multicast_addr(),
         p2p_addr: create_p2p_addr(),
     };
     let (manager_a, mut rx_a) = P2pManager::new(config).await?;
@@ -41,7 +40,7 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
         id: create_peer_id_two(),
         device: p2p::peer::DeviceType::AppleiPhone,
         name: String::from("Tester's phone"),
-        multicast: std::net::SocketAddr::V4(SocketAddrV4::new(DISCOVERY_MULTICAST, 50692)),
+        multicast: create_multicast_addr(),
         p2p_addr: create_p2p_addr(),
     };
     let (manager_b, mut rx_b) = P2pManager::new(config).await?;
@@ -58,7 +57,7 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     sleep(Duration::from_millis(100)).await;
 
     // assert node a discovered node b
-    let Ok(Some(AppEvent::PeerDiscovered(metadata))) = timeout(Duration::from_millis(100), rx_a.recv()).await else {
+    let Ok(Some(P2pEvent::PeerDiscovered(metadata))) = timeout(Duration::from_millis(100), rx_a.recv()).await else {
 
         assert!(false, "node a did not discover node b");
         return Ok(());
@@ -75,7 +74,7 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     let mut proxy_to_b = connected?;
     assert!(manager_a.is_connected(&metadata_b.id));
 
-    let Ok(Some(AppEvent::PeerConnected(mut proxy_to_a))) = timeout(Duration::from_millis(1000), rx_b.recv()).await else {
+    let Ok(Some(P2pEvent::PeerConnected(mut proxy_to_a))) = timeout(Duration::from_millis(1000), rx_b.recv()).await else {
         assert!(false, "node b did not connect to node a");
         return Ok(());
     };
@@ -100,7 +99,7 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
 
     // assert node A informs when node B disconnects
     drop(proxy_to_a);
-    let Ok(Some(AppEvent::PeerDisconnected(disconnect_id))) = timeout(Duration::from_millis(100), rx_a.recv()).await else {
+    let Ok(Some(P2pEvent::PeerDisconnected(disconnect_id))) = timeout(Duration::from_millis(100), rx_a.recv()).await else {
         assert!(false, "node a did not recieve disconnect event");
         return Ok(());
     };

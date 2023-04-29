@@ -10,7 +10,7 @@ pub(crate) fn device_type() -> peer::DeviceType {
 pub(crate) fn host_name() -> String {
     gethostname::gethostname()
         .into_string()
-        .unwrap_or_else(|_| String::from("UNKNOWN"))
+        .unwrap_or_else(|_| String::from("my-flydrop"))
 }
 
 #[cfg(target_os = "windows")]

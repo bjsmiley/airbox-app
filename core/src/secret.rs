@@ -1,7 +1,9 @@
-use crate::error::ConfError;
+use std::collections::{HashMap, HashSet};
+
+use crate::err::ConfError;
 use p2p::peer::{self, Identity};
 
-pub static SERVICE_NAME: &str = "airbox";
+pub static SERVICE_NAME: &str = "flydrop";
 pub static IDENTITY: &str = "Identity";
 pub static TOTP_AUTH: &str = "_Totp";
 
@@ -24,6 +26,18 @@ pub(crate) fn get_totp(peer: &peer::PeerId) -> Result<String, ConfError> {
     let key = peer.inner().clone() + TOTP_AUTH;
     let e = keyring::Entry::new(SERVICE_NAME, &key)?;
     Ok(e.get_password()?)
+}
+
+pub(crate) fn to_known(peers: &HashSet<peer::PeerMetadata>) -> Vec<peer::PeerCandidate> {
+    let mut map = Vec::new();
+    for peer in peers {
+        if let Ok(pwd) = get_totp(&peer.id) {
+            if let Ok(auth) = p2p::pairing::PairingAuthenticator::new(pwd.into_bytes()) {
+                map.push(peer::PeerCandidate::new(peer, auth));
+            }
+        }
+    }
+    map
 }
 
 /// used for testing, to mock the underlying secret store

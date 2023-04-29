@@ -1,8 +1,8 @@
 use crate::peer;
 
-/// Events that get sent to the application
+/// P2p Events that get sent to the application
 #[derive(Debug)]
-pub enum AppEvent {
+pub enum P2pEvent {
     /// A peer was discovered
     PeerDiscovered(peer::PeerMetadata),
 

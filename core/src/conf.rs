@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::Write;
 use std::path;
 
@@ -6,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
 
-use crate::error::ConfError;
+use crate::err::ConfError;
 use crate::plat;
 use crate::secret;
 
@@ -17,14 +18,14 @@ pub struct NodeConfig {
     pub name: String,
     #[serde(skip)]
     pub id: peer::PeerId,
-    pub peers: Vec<peer::PeerId>,
+    pub known_peers: HashSet<peer::PeerMetadata>,
 }
 
 impl Default for NodeConfig {
     fn default() -> Self {
         Self {
             name: plat::host_name(),
-            peers: Vec::new(),
+            known_peers: HashSet::new(),
             id: peer::PeerId::default(),
         }
     }
@@ -66,13 +67,19 @@ impl NodeConfigStore {
     }
 }
 
+impl From<String> for NodeConfigStore {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
     use p2p::peer::PeerId;
 
     use crate::conf::{NodeConfigStore, NODE_CONFIG_NAME};
-    use crate::error::ConfError;
+    use crate::err::ConfError;
     use crate::secret::mock_store;
 
     #[test]

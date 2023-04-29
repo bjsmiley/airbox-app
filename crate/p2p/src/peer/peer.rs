@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, net::SocketAddr, sync::Arc};
+use std::{collections::HashSet, hash::Hash, net::SocketAddr, sync::Arc};
 use tokio::{io::DuplexStream, net::TcpStream};
 
 use crate::{manager::P2pManager, pairing::PairingAuthenticator};
@@ -8,7 +8,7 @@ use super::PeerId;
 
 /// Represents public metadata about a peer. This is designed to hold information which is required among all applications using the P2P library.
 /// This metadata is discovered through the discovery process or sent by the connecting device when establishing a new P2P connection.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PeerMetadata {
     // pub name: String,
     // pub operating_system: Option<OperationSystem>,
@@ -18,6 +18,15 @@ pub struct PeerMetadata {
     pub id: PeerId,
     pub addr: std::net::SocketAddr, //pub ip: String,
                                     //pub port: u16
+}
+
+impl Hash for PeerMetadata {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.id.hash(state);
+    }
 }
 
 #[derive(
@@ -31,6 +40,7 @@ pub struct PeerMetadata {
     num_enum::IntoPrimitive,
 )]
 #[repr(u16)]
+#[derive(Eq)]
 pub enum DeviceType {
     // XboxOne = 1,
     AppleiPhone = 6,

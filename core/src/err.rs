@@ -7,6 +7,15 @@ pub enum CoreError {
     //Store(#[from] rusqlite::Error),
     #[error("A configuration file error occured")]
     Conf(#[from] ConfError),
+
+    #[error("An I/O error occured")]
+    IO(#[from] std::io::Error),
+
+    #[error("No local area ips found")]
+    NoNetworkAccess,
+
+    #[error("An error occured initializing p2p")]
+    P2p(#[from] p2p::err::InitError),
 }
 
 #[derive(Debug, Error)]

@@ -1,5 +1,5 @@
 pub mod discovery;
-mod err;
+pub mod err;
 pub mod event;
 mod event_loop;
 mod hmac;
