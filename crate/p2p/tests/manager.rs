@@ -1,4 +1,4 @@
-use std::{error::Error, net::SocketAddrV4, time::Duration};
+use std::{error::Error, time::Duration};
 
 use p2p::{
     event::P2pEvent,

@@ -1,14 +1,13 @@
-use std::collections::HashMap;
+
 use std::net::{SocketAddr, SocketAddrV4};
 use std::time::Duration;
 
 use crate::{conf, err, lan::LanManager, plat, secret};
-use p2p::peer::PeerMetadata;
+
 use p2p::{
     discovery,
     event::P2pEvent,
     manager::{P2pConfig, P2pManager},
-    peer::PeerId,
 };
 use tokio::sync::mpsc;
 use tokio::time::sleep;
@@ -121,7 +120,7 @@ impl Node {
     }
 
     // handle queries
-    async fn handle_query(&self, query: AppQuery) -> Result<CoreResponse, err::CoreError> {
+    async fn handle_query(&self, _query: AppQuery) -> Result<CoreResponse, err::CoreError> {
         todo!()
     }
 
@@ -137,7 +136,7 @@ impl Node {
                     }
                 });
             }
-            AppCmd::SetName(new) => {
+            AppCmd::SetName(_new) => {
                 todo!()
             }
         }
@@ -145,7 +144,7 @@ impl Node {
     }
 
     // handle events
-    async fn handle_event(&mut self, event: InternalEvent) {
+    async fn handle_event(&mut self, _event: InternalEvent) {
         todo!()
     }
 }

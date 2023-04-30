@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 
 use crate::err::ConfError;
 use p2p::peer::{self, Identity};
