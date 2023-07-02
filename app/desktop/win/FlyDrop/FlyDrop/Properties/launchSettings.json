@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "FlyDrop (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "FlyDrop (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

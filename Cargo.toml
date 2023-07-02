@@ -1,12 +1,15 @@
 [workspace]
 members = [
-    "crate/p2p",
-    "core"
+    "lib/p2p",
+    "lib/core",
+    "app/desktop/ffi"
 ]
 
 [workspace.dependencies]
 tokio = "1.25.0"
+tokio-util = "0.7.7"
 tracing = "0.1.37"
 thiserror = "1.0.38"
 serde = "1.0.152"
 futures = "0.3.28"
+bytes = "1.4.0"
