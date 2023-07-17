@@ -1,6 +1,5 @@
 use std::net::{SocketAddr, SocketAddrV4};
 use std::path::PathBuf;
-use std::time::Duration;
 
 use crate::proto::{Ctl, CtlRequest, CtlResponse, Session};
 use crate::{
@@ -19,12 +18,10 @@ use p2p::{
     event::P2pEvent,
     manager::{P2pConfig, P2pManager},
 };
-use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use tokio::time::{sleep, timeout};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, Id};
+use tracing::error;
 
 pub struct Node {
     /// the node configuration
@@ -83,13 +80,7 @@ impl Node {
             device: plat::DEVICE_TYPE,
             name: conf.name.clone(),
             multicast: SocketAddr::V4(SocketAddrV4::new(discovery::DISCOVERY_MULTICAST, 50692)), // TODO 0 port??
-            p2p_addr: SocketAddr::V4(SocketAddrV4::new(
-                // *lan.lan
-                //     .iter()
-                //     .next()
-                //     .ok_or(err::CoreError::NoNetworkAccess)?,
-                local, 0,
-            )),
+            p2p_addr: SocketAddr::V4(SocketAddrV4::new(local, 0)),
         };
         let (p2p, p2p_events) = P2pManager::new(p2p_conf).await?;
 
@@ -116,7 +107,7 @@ impl Node {
         Ok((node, events_rx))
     }
 
-    // called by
+    /// called by application on a dedicated thread
     pub async fn start(&mut self) {
         // TODO: start p2p event loop here?
         loop {
@@ -155,39 +146,10 @@ impl Node {
         }
 
         tracing::debug!("Shutting down node")
-
-        // get state from p2p and persist
+        // TODO: proper handling of shutting down
+        // TODO: get state from p2p and persist
     }
 
-    // pub async fn get_conf(&self) -> conf::NodeConfig {
-    //     self.conf.clone()
-    // }
-
-    // pub async fn set_config(&self, new: conf::NodeConfig) {
-    //     _ = self.get_cmd_api().send(cmd::Request::SetConfig(new)).await;
-    // }
-
-    // pub async fn start_discovery(&self) {
-    //     _ = self.get_cmd_api().send(cmd::Request::StartDiscovery).await;
-    // }
-
-    // pub async fn stop_discovery(&self) {
-    //     _ = self.get_cmd_api().send(cmd::Request::StopDiscovery).await;
-    // }
-
-    // pub async fn send_peer(&self, id: PeerId, req: PeerRequest) -> cmd::Response {
-    //     self.get_cmd_api()
-    //         .send(cmd::Request::SendPeer(id, req))
-    //         .await
-    //         .unwrap_or(cmd::Response::Err)
-    // }
-
-    // pub fn get_controller(&self) -> CoreController {
-    //     CoreController {
-    //         query_tx: self.query.0.clone(),
-    //         command_tx: self.cmd.0.clone(),
-    //     }
-    // }
     pub fn get_query_api(&self) -> api::QueryApi {
         api::Api {
             tx: self.query.0.clone(),
@@ -210,16 +172,13 @@ impl Node {
             query::Request::GetSharableQrCode(shared_secret) => {
                 // is the optional shared secret is set, that means this is the second stage of pairing 2 devices
                 let secret = match shared_secret {
-                    None => rand::random::<u64>().to_string(),
+                    None => rand::random::<u64>().to_string(), // TODO: more secure secret
                     Some(s) => s,
                 };
-                let payload = serde_json::to_vec(&QrPayload {
+                query::Response::SharableQrCode(QrPayload {
                     secret,
                     peer: self.p2p.get_metadata().clone(),
-                })?;
-                // let code = qrcode::QrCode::new(payload)?;
-                // let image = code.render::<image::Luma<u8>>().build();
-                query::Response::SharableQrCode(payload)
+                })
             }
         })
     }
@@ -229,26 +188,10 @@ impl Node {
         match cmd {
             cmd::Request::StartDiscovery => {
                 if self.state.discovery_ct.is_none() {
-                    let token = CancellationToken::new();
-                    self.state.discovery_ct = Option::Some(token.clone());
-                    info!("channel close? {}", self.p2p.is_discovery_channel_closed());
-                    let p2p = self.p2p.clone();
-                    info!("channel close? {}", p2p.is_discovery_channel_closed());
-
-                    tokio::spawn(async move {
-                        debug!("request presence loop started");
-                        info!("channel close? {}", p2p.is_discovery_channel_closed());
-                        p2p.request_presence().await;
-                        loop {
-                            info!("channel close.? {}", p2p.is_discovery_channel_closed());
-                            sleep(Duration::from_secs(2)).await;
-                            tokio::select! {
-                                _ = token.cancelled() => break,
-                                _ = p2p.request_presence() => continue
-                            };
-                        }
-                        debug!("request presence loop stopped");
-                    });
+                    let ct = CancellationToken::new();
+                    self.state.discovery_ct = Option::Some(ct.clone());
+                    let tx = self.internal.0.clone();
+                    tokio::spawn(crate::disc::start(tx, ct));
                 }
             }
             cmd::Request::StopDiscovery => {
@@ -258,13 +201,13 @@ impl Node {
                 self.state.discovery_ct = None;
             }
             cmd::Request::SendPeer(id, request) => {
-                // Current state: "similar" to HTTP 1 - 1 request & N responses per connection
+                // Current state: "similar" to HTTP 1 - 1 request per connection
                 // TODO: save and reuse connections (HTTP 1.1)
                 // TODO: support more complex flows, timeouts, etc.
 
                 let peer = self.p2p.connect_to_peer(&id).await?;
                 let tx = self.internal.0.clone();
-                self.state.session_id += 1;
+                self.state.session_id += 1; // update the session id
                 let session = Session {
                     id: self.state.session_id,
                     ctl: Ctl::Request(request.into()),
@@ -276,12 +219,11 @@ impl Node {
                 self.store.set(&new)?;
                 self.conf = new;
             }
-            cmd::Request::Pair(json) => {
-                let payload: QrPayload = serde_json::from_slice(json.as_slice())?;
+            cmd::Request::Pair(payload) => {
                 let auth = PairingAuthenticator::new(payload.secret.into_bytes())?;
                 let known = PeerCandidate::new(&payload.peer, auth);
                 self.conf.known_peers.insert(payload.peer);
-                self.store.set(&self.conf)?;
+                self.store.set(&self.conf)?; // TODO: save new secret to keyring
                 self.p2p.add_known_peer(known);
             }
             cmd::Request::Ack(_, session, ack) => {
@@ -351,6 +293,7 @@ impl Node {
                 }
                 x => error!("Unhandled app ctl response {:?}", x),
             },
+            InternalEvent::RequestPresence => self.p2p.request_presence(),
         }
 
         Ok(())
@@ -386,32 +329,11 @@ pub enum CoreEvent {
     PeerCtlFailed(PeerId),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct QrPayload {
     pub secret: String,
     pub peer: PeerMetadata,
 }
-
-// // commands and queries sent from the application layer to core
-// #[repr(C)]
-// pub enum AppCmd {
-//     SetName(String),
-//     Discover(u8),
-// }
-
-// pub enum AppQuery {
-//     GetConf,
-// }
-
-// #[derive(Serialize, Deserialize, Debug)]
-// #[serde(tag = "key", content = "data")]
-// #[ts(export)]
-// #[repr(u8)]
-// pub enum CoreResponse {
-//     Ok,
-//     Conf(p2p::peer::PeerId), // ClientGetState(ClientState),
-//                              // Sum(i32),
-// }
 
 /// Events from child threads
 pub(crate) enum InternalEvent {
@@ -425,73 +347,9 @@ pub(crate) enum InternalEvent {
         tx: mpsc::Sender<Session>,
     },
     /// A remote host sent a session response
-    SessionResult { id: PeerId, body: Session },
+    SessionResult {
+        id: PeerId,
+        body: Session,
+    },
+    RequestPresence,
 }
-
-// a wrapper around external input with a returning sender channel for core to respond
-// #[derive(Debug)]
-// pub struct ReturnableMessage<D, R = Result<CoreResponse, err::CoreError>> {
-//     data: D,
-//     tx_return: tokio::sync::oneshot::Sender<R>,
-// }
-
-// pub struct Ctx<T> {
-//     tx: mpsc::UnboundedSender<ReturnableMessage<T>>,
-// }
-
-// impl Ctx<AppQuery> {
-//     pub async fn send(&self, msg: AppQuery) -> Result<CoreResponse, err::CoreError> {
-//         let (tx, rx) = tokio::sync::oneshot::channel();
-//         let payload = ReturnableMessage {
-//             data: msg,
-//             tx_return: tx,
-//         };
-
-//         self.tx.send(payload).unwrap_or(());
-//         rx.await.unwrap()
-//     }
-// }
-
-// impl Ctx<AppCmd> {
-//     pub async fn send(&self, msg: AppCmd) -> Result<CoreResponse, err::CoreError> {
-//         let (tx, rx) = tokio::sync::oneshot::channel();
-//         let payload = ReturnableMessage {
-//             data: msg,
-//             tx_return: tx,
-//         };
-
-//         self.tx.send(payload).unwrap_or(());
-//         rx.await.unwrap()
-//     }
-// }
-
-// core controller is passed to the client to communicate with the core which runs in a dedicated thread
-// #[derive(Clone)]
-// pub struct CoreController {
-//     query_tx: mpsc::UnboundedSender<ReturnableMessage<AppQuery>>,
-//     command_tx: mpsc::UnboundedSender<ReturnableMessage<AppCmd>>,
-// }
-
-// impl CoreController {
-//     pub async fn query(&self, query: AppQuery) -> Result<CoreResponse, err::CoreError> {
-// let (tx, rx) = tokio::sync::oneshot::channel();
-// let payload = ReturnableMessage {
-//     data: query,
-//     tx_return: tx,
-// };
-
-// self.query_tx.send(payload).unwrap_or(());
-// rx.await.unwrap()
-//     }
-
-//     pub async fn command(&self, cmd: AppCmd) -> Result<CoreResponse, err::CoreError> {
-//         let (tx, rx) = tokio::sync::oneshot::channel();
-//         let payload = ReturnableMessage {
-//             data: cmd,
-//             tx_return: tx,
-//         };
-
-//         self.command_tx.send(payload).unwrap_or(());
-//         rx.await.unwrap()
-//     }
-// }

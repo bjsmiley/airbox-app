@@ -9,8 +9,9 @@ edition = "2021"
 futures-util = "0.3.26"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-tokio = { workspace = true, features = ["macros", "sync", "net", "rt", "time", "io-util"] }
+tokio = { workspace = true, features = ["macros", "sync", "net", "rt", "time", "io-util", "tracing"] }
 serde = { workspace = true, features = ["derive"] }
+rand = "0.8.5"
 ring = "0.16.20"
 num_enum = "0.5.10"
 dashmap = "5.4.0"

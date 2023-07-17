@@ -14,7 +14,7 @@ pub struct LanManager {
 impl LanManager {
     pub fn new() -> Result<Self, std::io::Error> {
         let watch = IfWatcher::new()?;
-        let mut lan = HashSet::new();
+        let lan = HashSet::new();
         // for net in watch.iter() {
         //     if let IpAddr::V4(ip) = net.addr() {
         //         if ip != Ipv4Addr::LOCALHOST {

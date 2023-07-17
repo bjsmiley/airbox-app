@@ -9,36 +9,29 @@ pub const CTL_CANCEL: u32 = 2;
 /// These messages are sent across during an active session between two connected and authenticated devices.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Session {
+    /// The session id this message is associated with
     pub id: u64,
+    /// The app control message body
     pub ctl: Ctl,
 }
-
-/// These messages are sent across during an active session between two connected and authenticated devices.
-// #[derive(Debug, Serialize, Deserialize)]
-// pub enum Session {
-//     Ctl(Ctl),
-// }
 
 /// Application control messages
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Ctl {
+    /// An app control request sent to a remote peer
     Request(CtlRequest),
-    Response(CtlResponse), // /// Request to launch a uri on the host device
-                           // LaunchUri(String),
-                           // /// Response from the host device to launch a uri
-                           // LaunchUriResult(LaunchUriResult),
+    /// A response to an app control request sent from a remote peer
+    Response(CtlResponse),
 }
 
-/// The request to send to a host device
+/// The request to send to a remote peer
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CtlRequest {
     /// Request to launch a uri on the host device
     LaunchUri(String),
-    // Introduce self
-    // Hello,
 }
 
-/// The response from attempting to perform an app control requet on a host
+/// The response from attempting to perform an app control request on a host
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CtlResponse {
     /// The host device successfully completed the app control request
@@ -51,13 +44,8 @@ pub enum CtlResponse {
     Cancel,
 }
 
+#[derive(Default)]
 pub struct SessionCodec(LinesCodec);
-
-impl Default for SessionCodec {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
 
 impl Encoder<Session> for SessionCodec {
     type Error = crate::err::ParseError;
@@ -80,63 +68,3 @@ impl Decoder for SessionCodec {
         }
     }
 }
-
-// pub struct RequestCodec(LinesCodec);
-
-// impl Default for RequestCodec {
-//     fn default() -> Self {
-//         Self(Default::default())
-//     }
-// }
-
-// impl Encoder<PeerRequest> for RequestCodec {
-//     type Error = crate::err::ParseError;
-
-//     fn encode(&mut self, item: PeerRequest, dst: &mut bytes::BytesMut) -> Result<(), Self::Error> {
-//         let msg = serde_json::to_string(&item)?;
-//         Ok(self.0.encode(msg, dst)?)
-//     }
-// }
-
-// impl Decoder for RequestCodec {
-//     type Item = PeerRequest;
-
-//     type Error = crate::err::ParseError;
-
-//     fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-//         match self.0.decode(src)? {
-//             Some(json) => Ok(Some(serde_json::from_slice::<Self::Item>(json.as_bytes())?)),
-//             None => Ok(None),
-//         }
-//     }
-// }
-
-// pub struct ReponseCodec(LinesCodec);
-
-// impl Default for ReponseCodec {
-//     fn default() -> Self {
-//         Self(Default::default())
-//     }
-// }
-
-// impl Encoder<PeerResponse> for ReponseCodec {
-//     type Error = crate::err::ParseError;
-
-//     fn encode(&mut self, item: PeerResponse, dst: &mut bytes::BytesMut) -> Result<(), Self::Error> {
-//         let msg = serde_json::to_string(&item)?;
-//         Ok(self.0.encode(msg, dst)?)
-//     }
-// }
-
-// impl Decoder for ReponseCodec {
-//     type Item = PeerResponse;
-
-//     type Error = crate::err::ParseError;
-
-//     fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-//         match self.0.decode(src)? {
-//             Some(json) => Ok(Some(serde_json::from_slice::<Self::Item>(json.as_bytes())?)),
-//             None => Ok(None),
-//         }
-//     }
-// }

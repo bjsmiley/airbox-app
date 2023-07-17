@@ -2,12 +2,13 @@
 members = [
     "lib/p2p",
     "lib/core",
-    "app/desktop/ffi"
+    # "app/desktop/ffi",
+    "tools/udpm"
 ]
 
 [workspace.dependencies]
-tokio = "1.25.0"
-tokio-util = "0.7.7"
+tokio = "1.29.1"
+tokio-util = "0.7.8"
 tracing = "0.1.37"
 thiserror = "1.0.38"
 serde = "1.0.152"

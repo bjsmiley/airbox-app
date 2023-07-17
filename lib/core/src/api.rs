@@ -61,14 +61,14 @@ impl QueryApi {
         }
     }
 
-    pub async fn get_qrcode(&self) -> ApiResult<Vec<u8>> {
+    pub async fn get_qrcode(&self) -> ApiResult<crate::node::QrPayload> {
         match self.send2(query::Request::GetSharableQrCode(None)).await? {
             query::Response::SharableQrCode(code) => Ok(code),
             _ => Err(()),
         }
     }
 
-    pub async fn get_qrcode2(&self, secret: String) -> ApiResult<Vec<u8>> {
+    pub async fn get_qrcode2(&self, secret: String) -> ApiResult<crate::node::QrPayload> {
         match self
             .send2(query::Request::GetSharableQrCode(Some(secret)))
             .await?
@@ -92,7 +92,7 @@ impl CmdApi {
         self.send2(cmd::Request::SetConfig(config)).await?.into()
     }
 
-    pub async fn pair(&self, payload: Vec<u8>) -> EmptyApiResult {
+    pub async fn pair(&self, payload: crate::node::QrPayload) -> EmptyApiResult {
         self.send2(cmd::Request::Pair(payload)).await?.into()
     }
 
@@ -127,7 +127,7 @@ pub mod cmd {
         StopDiscovery,
         SendPeer(peer::PeerId, PeerRequest),
         // qr code json payload
-        Pair(Vec<u8>),
+        Pair(crate::node::QrPayload),
         Ack(peer::PeerId, u64, Ack),
     }
 
@@ -183,7 +183,7 @@ pub mod query {
     pub enum Response {
         Conf(conf::NodeConfig),
         DiscoveredPeers(Vec<p2p::peer::PeerMetadata>),
-        SharableQrCode(Vec<u8>),
+        SharableQrCode(crate::node::QrPayload),
         Err,
     }
 }

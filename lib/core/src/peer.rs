@@ -1,40 +1,13 @@
 use futures::{SinkExt, StreamExt};
 use p2p::peer::Peer;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tokio::{
-    io::{AsyncReadExt, BufReader, BufStream},
-    sync::{
-        mpsc::{self, UnboundedSender},
-        oneshot,
-    },
-};
-use tokio_util::{
-    codec::{
-        AnyDelimiterCodec, AnyDelimiterCodecError, Decoder, Encoder, Framed, FramedRead,
-        FramedWrite,
-    },
-    io::SyncIoBridge,
-};
+use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{debug, error};
 
 use crate::{
-    api::cmd::PeerRequest,
     node::InternalEvent,
     proto::{Session, SessionCodec},
 };
-
-// #[derive(Debug, Serialize, Deserialize)]
-// pub enum PeerRequest {
-//     OpenUri(String),
-// }
-
-// #[derive(Debug, Serialize, Deserialize)]
-// pub enum PeerResponse {
-//     Ok,
-//     Err,
-//     // Waiting,
-//     // accept, complete, waiting
-// }
 
 pub(crate) async fn client_handler(peer: Peer, req: Session, tx: UnboundedSender<InternalEvent>) {
     let (r, w) = tokio::io::split(peer.conn);

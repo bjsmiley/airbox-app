@@ -1,28 +1,28 @@
+use futures_util::{SinkExt, StreamExt};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
-    net::TcpListener,
-    sync::mpsc::{Receiver, UnboundedReceiver},
+    net::{TcpListener, UdpSocket},
+    sync::mpsc::UnboundedReceiver,
 };
-use tracing::debug;
+use tokio_util::udp::UdpFramed;
+use tracing::{debug, error};
 
 use crate::{
     event::{DiscoveryEvent, InternalEvent},
     manager::P2pManager,
+    proto::DiscoveryCodec,
 };
 
 pub(crate) async fn p2p_event_loop(
     manager: Arc<P2pManager>,
-    mut discovery: Receiver<(DiscoveryEvent, SocketAddr)>,
     mut internal_channel: UnboundedReceiver<InternalEvent>,
+    mut discovery_channel: UnboundedReceiver<DiscoveryEvent>,
     listener: TcpListener,
+    discovery: (UdpSocket, SocketAddr),
 ) {
-    loop {
-        tracing::debug!(
-            "is {} discovery closed? {}",
-            manager.id,
-            manager.is_discovery_channel_closed()
-        );
+    let (mut udp_tx, mut udp_rx) = UdpFramed::new(discovery.0, DiscoveryCodec).split();
 
+    loop {
         tokio::select! {
             internal_event = internal_channel.recv() => {
                 let Some(_) = internal_event else {
@@ -30,7 +30,6 @@ pub(crate) async fn p2p_event_loop(
                     break;
                 };
             },
-
             stream_event = listener.accept() => {
                 let Ok((stream, addr)) = stream_event else {
                    continue;
@@ -43,35 +42,37 @@ pub(crate) async fn p2p_event_loop(
                     }
                 });
             },
-            discovery_event = discovery.recv() => {
-                tracing::debug!(
-                    "is {} discovery closed? {}",
-                    manager.id,
-                    manager.is_discovery_channel_closed()
-                );
-                let Some(event) = discovery_event else {
-                    tracing::warn!("Discovery Reciever closed for peer {}", manager.id);
-                    break
-                    // continue;
+            outbound_discovery = discovery_channel.recv() => {
+                let Some(event) = outbound_discovery else {
+                    debug!("App stopped sending main event loop messages");
+                    break;
                 };
-                match event {
-                    (DiscoveryEvent::PresenceResponse(peer), _) => {
-                        if manager.id == peer.id {
-                            // the node received its own presence response
-                            continue;
+                debug!("Sending {} to addr {}", event, discovery.1);
+                if let Err(e) = udp_tx.send((event, discovery.1)).await {
+                    error!("Error sending discovery event: {:?}", e);
+                };
+            },
+            inbound_discovery = udp_rx.next() => {
+                let Some(frame) = inbound_discovery else {
+                    error!("Recieved None from inbound discovery");
+                    break;
+                };
+                match frame {
+                    Err(e) => error!("error reading from Discovery: {:?}", e),
+                    Ok((DiscoveryEvent::PresenceResponse(peer), addr)) => {
+                        if manager.id != peer.id {
+                            debug!("Remote peer discovered at {:?}", addr);
+                            manager.handle_peer_discovered(peer);
                         }
-                        debug!("Remote peer discovered at {:?}", peer.addr);
-                        manager.handle_peer_discovered(peer);
-                        // if let Ok(id) = crate::PeerId::from_string(peer.id.clone()) {
-                        //     manager.handle_peer_discovered(id, peer, addr);
-                        // }
                     },
-                    (DiscoveryEvent::PresenceRequest, addr) => {
-                        debug!("Remote peer requested presence at {:?}", addr);
-                        manager.handle_presence_request().await;
+                    Ok((DiscoveryEvent::PresenceRequest(dedup), addr)) => {
+                        if manager.dedup != dedup {
+                            debug!("Remote peer requested presence at {:?}", addr);
+                            manager.handle_presence_request();
+                        }
                     }
                 }
-            },
+            }
         }
     }
     debug!("Shutting down p2p event loop");

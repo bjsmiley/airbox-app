@@ -19,7 +19,7 @@ pub enum P2pEvent {
 /// Events being sent and recieved to the discovery mechanism
 pub enum DiscoveryEvent {
     /// Request for any presence information
-    PresenceRequest,
+    PresenceRequest(u32),
 
     /// Response to any presence request
     PresenceResponse(peer::PeerMetadata),
@@ -28,7 +28,7 @@ pub enum DiscoveryEvent {
 impl Display for DiscoveryEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            DiscoveryEvent::PresenceRequest => write!(f, "PresenceRequest"),
+            DiscoveryEvent::PresenceRequest(_) => write!(f, "PresenceRequest"),
             DiscoveryEvent::PresenceResponse(_) => write!(f, "PresenceResponse"),
         }
     }
@@ -37,7 +37,7 @@ impl Display for DiscoveryEvent {
 impl crate::proto::Frame for DiscoveryEvent {
     fn len(&self) -> u16 {
         match self {
-            DiscoveryEvent::PresenceRequest => 1,
+            DiscoveryEvent::PresenceRequest(_) => 1 + 4,
             DiscoveryEvent::PresenceResponse(meta) => {
                 1 + 2
                     + 2

@@ -25,13 +25,13 @@ impl PeerId {
     /// from_cert will derive a [PeerId] from a [rustls::Certificate].
     pub fn from_cert(cert: &rustls::Certificate) -> Self {
         // SHA-1 is used due to the limitation of the length of a DNS record used for mDNS local network discovery.
-        let peer_id = digest(&ring::digest::SHA256, &cert.0)
+        let peer_id: String = digest(&ring::digest::SHA256, &cert.0)
             .as_ref()
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect();
 
-        Self(peer_id)
+        Self(peer_id[..40].to_owned())
     }
 
     pub fn inner(&self) -> &String {
@@ -77,23 +77,6 @@ pub struct Identity {
 }
 
 impl Identity {
-    /// Create a new Identity for the current peer.
-    pub fn new() -> Self {
-        let mut parameters: CertificateParams = Default::default();
-        parameters.distinguished_name = DistinguishedName::new();
-        parameters
-            .distinguished_name
-            .push(DnType::CommonName, CERTIFICATE_COMMON_NAME);
-        parameters.subject_alt_names = vec![SanType::IpAddress(Ipv4Addr::LOCALHOST.into())];
-
-        let cert = rcgen::Certificate::from_params(parameters).unwrap();
-
-        Self {
-            certificate: cert.serialize_der().unwrap(),
-            private_key: cert.serialize_private_key_der(),
-        }
-    }
-
     /// Load the current identity from it's raw form.
     pub fn from_raw(certificate: Vec<u8>, private_key: Vec<u8>) -> Self {
         Self {
@@ -113,5 +96,33 @@ impl Identity {
             rustls::Certificate(self.certificate),
             rustls::PrivateKey(self.private_key),
         )
+    }
+}
+
+impl Default for Identity {
+    /// Create a new Identity for the current peer.
+    fn default() -> Self {
+        let mut parameters: CertificateParams = Default::default();
+        parameters.distinguished_name = DistinguishedName::new();
+        parameters
+            .distinguished_name
+            .push(DnType::CommonName, CERTIFICATE_COMMON_NAME);
+        parameters.subject_alt_names = vec![SanType::IpAddress(Ipv4Addr::LOCALHOST.into())];
+
+        let cert = rcgen::Certificate::from_params(parameters).unwrap();
+
+        Self {
+            certificate: cert.serialize_der().unwrap(),
+            private_key: cert.serialize_private_key_der(),
+        }
+    }
+}
+
+mod test {
+    #[test]
+    pub fn peer_id_from_cert_is_40_chars() {
+        let id = super::Identity::default();
+        let peer = super::PeerId::from_cert(&id.into_rustls().0);
+        assert_eq!(40, peer.len())
     }
 }

@@ -53,46 +53,26 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
 
     // node A sends presence request
     sleep(Duration::from_millis(100)).await;
-    manager_a.request_presence().await;
+    manager_a.request_presence();
     sleep(Duration::from_millis(100)).await;
 
     // assert node a discovered node b
     let Ok(Some(P2pEvent::PeerDiscovered(metadata))) = timeout(Duration::from_millis(100), rx_a.recv()).await else {
-
-        assert!(false, "node a did not discover node b");
-        return Ok(());
+        panic!("node a did not discover node b");
     };
-
-    // // cut
-    //     // node A sends presence request
-    //     sleep(Duration::from_millis(100)).await;
-    //     manager_a.request_presence().await;
-    //     sleep(Duration::from_millis(100)).await;
-
-    //     // assert node a discovered node b
-    //     let t  = rx_a.recv().await;
-    //     tracing::debug!("{:?}", t);
-    //     let Some(P2pEvent::PeerDiscovered(metadata)) = t else {
-
-    //         assert!(false, "node a did not discover node b");
-    //         return Ok(());
-    //     };
-    // // cut
     assert!(manager_a.is_discovered(&metadata.id));
     let metadata_b = manager_b.get_metadata();
     assert_eq!(metadata_b.clone(), metadata);
 
     // assert node a can connect to node b
     let Ok(connected) = timeout(Duration::from_millis(10000),manager_a.connect_to_peer(&metadata.id)).await else {
-        assert!(false, "node a did not connect to node b");
-        return Ok(());
+        panic!("node a did not connect to node b");
     };
     let mut proxy_to_b = connected?;
     assert!(manager_a.is_connected(&metadata_b.id));
 
     let Ok(Some(P2pEvent::PeerConnected(mut proxy_to_a))) = timeout(Duration::from_millis(1000), rx_b.recv()).await else {
-        assert!(false, "node b did not connect to node a");
-        return Ok(());
+        panic!("node b did not connect to node a");
     };
     let metadata_a = manager_a.get_metadata();
     assert!(manager_b.is_connected(&metadata_a.id));
@@ -116,8 +96,7 @@ async fn peers_discover_connect_send_data() -> Result<(), Box<dyn Error>> {
     // assert node A informs when node B disconnects
     drop(proxy_to_a);
     let Ok(Some(P2pEvent::PeerDisconnected(disconnect_id))) = timeout(Duration::from_millis(100), rx_a.recv()).await else {
-        assert!(false, "node a did not recieve disconnect event");
-        return Ok(());
+        panic!("node a did not recieve disconnect event");
     };
     assert_eq!(metadata_b.id, disconnect_id);
     assert!(!manager_b.is_connected(&metadata_a.id));

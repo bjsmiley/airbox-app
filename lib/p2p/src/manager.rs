@@ -39,13 +39,16 @@ pub struct P2pManager {
     connected_peers: DashSet<PeerId>,
 
     /// channel to send Discovery events
-    discovery_channel: mpsc::Sender<DiscoveryEvent>,
+    discovery_channel: mpsc::UnboundedSender<DiscoveryEvent>,
 
     /// internal_channel is a channel which is used to communicate with the main internal event loop.
     internal_channel: mpsc::UnboundedSender<InternalEvent>,
 
     /// app_channel is a channel which is used to communicate with the application
     app_channel: mpsc::UnboundedSender<P2pEvent>,
+
+    /// an id for deduplicating presense requests
+    pub(crate) dedup: u32,
 }
 
 pub struct P2pConfig {
@@ -60,15 +63,12 @@ impl P2pManager {
     pub async fn new(
         config: P2pConfig,
     ) -> std::io::Result<(Arc<Self>, mpsc::UnboundedReceiver<P2pEvent>)> {
-        let discover = {
-            // use LOCALHOST or UNSPECIFICED?
-            let local = SocketAddr::V4(SocketAddrV4::new(
-                Ipv4Addr::LOCALHOST,
-                config.multicast.port(),
-            ));
-            let (socket, multi_addr) = discovery::multicast(&local, &config.multicast)?;
-            discovery::start(socket, multi_addr)
-        };
+        // setup discovery
+        let local = SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::LOCALHOST,
+            config.multicast.port(),
+        ));
+        let discovery = discovery::multicast(&local, &config.multicast)?;
 
         // setup tcp listener
         let listener = TcpListener::bind(config.p2p_addr).await?;
@@ -88,6 +88,7 @@ impl P2pManager {
 
         let internal_channel = mpsc::unbounded_channel();
         let app_channel = mpsc::unbounded_channel();
+        let discovery_channel = mpsc::unbounded_channel();
 
         let this = Arc::new(Self {
             id: config.id,
@@ -95,16 +96,18 @@ impl P2pManager {
             known_peers: DashMap::new(),
             discovered_peers: DashMap::new(),
             connected_peers: DashSet::new(),
-            discovery_channel: discover.0,
+            discovery_channel: discovery_channel.0,
             internal_channel: internal_channel.0,
             app_channel: app_channel.0,
+            dedup: rand::random(),
         });
 
         tokio::spawn(event_loop::p2p_event_loop(
             this.clone(),
-            discover.1,
             internal_channel.1,
+            discovery_channel.1,
             listener,
+            discovery,
         ));
 
         Ok((this, app_channel.1))
@@ -121,11 +124,10 @@ impl P2pManager {
     }
 
     // called by the application to send a presenct request
-    pub async fn request_presence(self: &Arc<Self>) {
+    pub fn request_presence(&self) {
         if let Err(e) = self
             .discovery_channel
-            .send(DiscoveryEvent::PresenceRequest)
-            .await
+            .send(DiscoveryEvent::PresenceRequest(self.dedup))
         {
             tracing::error!("application is unable to request presence: {}", e);
         } else {
@@ -214,6 +216,7 @@ impl P2pManager {
     pub(crate) fn handle_peer_discovered(&self, peer: PeerMetadata) {
         let id = peer.id.clone();
         if !self.connected_peers.contains(&id) && !self.discovered_peers.contains_key(&id) {
+            // TODO: fix not removing
             if let Some(known) = self.known_peers.remove(&id) {
                 let mut candidate = PeerCandidate {
                     id: id.clone(),
@@ -237,11 +240,10 @@ impl P2pManager {
     }
 
     /// event loop calls this to inform manager a peer requested our precesence
-    pub(crate) async fn handle_presence_request(&self) {
+    pub(crate) fn handle_presence_request(&self) {
         if let Err(e) = self
             .discovery_channel
             .send(DiscoveryEvent::PresenceResponse(self.metadata.clone()))
-            .await
         {
             error!("event loop is unable to emit presence: {}", e);
         } else {

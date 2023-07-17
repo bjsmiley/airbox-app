@@ -1,5 +1,5 @@
-use core::api;
-use core::node::{CoreEvent, Node};
+use fdcore::api;
+use fdcore::node::{CoreEvent, Node};
 use std::collections::VecDeque;
 use std::io::BufReader;
 use std::sync::Arc;

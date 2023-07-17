@@ -7,4 +7,4 @@ pub mod manager;
 mod net;
 pub mod pairing;
 pub mod peer;
-mod proto;
+pub mod proto;

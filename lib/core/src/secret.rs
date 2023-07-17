@@ -13,7 +13,7 @@ pub(crate) fn get_identity() -> Result<peer::Identity, ConfError> {
     match e.get_password() {
         Ok(data) => Ok(serde_json::from_str(&data)?),
         Err(keyring::error::Error::NoEntry) => {
-            let id = Identity::new();
+            let id = Identity::default();
             let data = serde_json::to_string(&id)?;
             e.set_password(&data)?;
             Ok(id)

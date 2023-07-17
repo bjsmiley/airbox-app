@@ -1,0 +1,13 @@
+[package]
+name = "udpm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+p2p = { path = "../../lib/p2p" }
+clap = { version = "4.3.11", features = ["derive"] }
+tokio = { workspace = true, features = ["net", "rt", "rt-multi-thread"] }
+futures = { workspace = true }
+tokio-util = { workspace = true, features = ["net", "codec"] }
+
+

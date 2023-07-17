@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::io::Write;
-use std::path::PathBuf;
 
 use p2p::peer;
 use serde::{Deserialize, Serialize};
@@ -120,22 +119,18 @@ impl From<path::PathBuf> for NodeConfigStore {
 mod tests {
 
     use p2p::peer::PeerId;
-    use std::path::PathBuf;
 
-    use crate::conf::{NodeConfigStore, NODE_CONFIG_NAME};
+    use crate::conf::NodeConfigStore;
     use crate::err::ConfError;
     use crate::secret::mock_store;
 
     #[test]
     pub fn get_set_conf() -> Result<(), ConfError> {
         mock_store();
-        // let dir = String::from("C:\\Users\\bryan\\AppData\\Local\\Temp"); // TODO
-        // let mut dir = PathBuf::new();
         let dir = std::path::Path::new(env!("TMP")).join("flydrop");
         _ = std::fs::remove_dir_all(dir.clone());
         _ = std::fs::create_dir_all(dir.clone());
 
-        // dir.push("C:\\Users\\bryan\\AppData\\Local\\Temp");
         let store: NodeConfigStore = dir.into();
         let mut conf = store.get()?;
         assert_ne!(PeerId::default(), conf.id);
@@ -143,9 +138,6 @@ mod tests {
         store.set(&conf)?;
         let conf = store.get()?;
         assert_eq!("override name", conf.name);
-        // cleanup
-        // let path = std::path::Path::new(&dir).join(NODE_CONFIG_NAME);
-        // _ = std::fs::remove_file(path);
         Ok(())
     }
 }

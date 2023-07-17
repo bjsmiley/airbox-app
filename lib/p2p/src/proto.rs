@@ -12,12 +12,46 @@ use crate::{
 
 pub(crate) const SIGNATURE: [u8; 2] = hex_literal::hex!("4040");
 
-// pub(crate) trait Length {
-//     fn get_length(&self) -> u16;
-// }
 // https://developerlife.com/2022/03/30/rust-proc-macro/
 // https://blog.logrocket.com/macros-in-rust-a-tutorial-with-examples/#customderivemacros
 // rust custom derive macro
+/// Each frame needs to know it's length before sending
+pub trait Frame {
+    fn len(&self) -> u16;
+}
+
+pub struct Header {
+    pub length: u16,
+    pub message_type: MessageType,
+}
+
+impl Header {
+    pub fn new(typ: MessageType, item: &impl Frame) -> Header {
+        let mut header = Header {
+            message_type: typ,
+            length: item.len(),
+        };
+        header.length += header.len();
+        header
+    }
+}
+
+impl Frame for Header {
+    fn len(&self) -> u16 {
+        2 + 2 + 1 // dont forget signature ;)
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum MessageType {
+    // None = 0,
+    Discovery = 1,
+    Connect = 2,
+    // Control = 3,
+    // Session = 4,
+    // Ack = 5
+}
 
 pub struct DiscoveryCodec;
 
@@ -35,9 +69,13 @@ impl Decoder for DiscoveryCodec {
         }
 
         match src.get_u8() {
-            0 => Ok(Some(event::DiscoveryEvent::PresenceRequest)),
+            0 => {
+                let dedup = src.get_u32();
+                Ok(Some(event::DiscoveryEvent::PresenceRequest(dedup)))
+            }
             1 => {
                 let device_type_raw = src.get_u16();
+                let device_type = DeviceType::try_from_primitive(device_type_raw)?;
                 let device_name_length = src.get_u16();
                 let device_name_bytes = src.split_to(device_name_length.into());
                 let device_name_raw = &device_name_bytes[..];
@@ -49,7 +87,6 @@ impl Decoder for DiscoveryCodec {
                 let device_addr_bytes = src.split_to(device_addr_length.into());
                 let device_addr_str = String::from_utf8(device_addr_bytes.to_vec()).unwrap();
                 let device_addr: SocketAddr = device_addr_str.parse()?;
-                let device_type = DeviceType::try_from_primitive(device_type_raw)?;
 
                 Ok(Some(event::DiscoveryEvent::PresenceResponse(
                     PeerMetadata {
@@ -75,18 +112,21 @@ impl Encoder<event::DiscoveryEvent> for DiscoveryCodec {
     ) -> Result<(), Self::Error> {
         HeaderCodec.encode(Header::new(MessageType::Discovery, &item), dst)?;
         match item {
-            event::DiscoveryEvent::PresenceRequest => {
+            event::DiscoveryEvent::PresenceRequest(dedup) => {
                 dst.put_u8(0); // DiscoveryType
+                dst.put_u32(dedup); // DedupId
             }
             event::DiscoveryEvent::PresenceResponse(metadata) => {
+                let name = metadata.name.as_bytes();
                 dst.put_u8(1); // DiscoveryType
                 dst.put_u16(metadata.typ.into()); // DeviceType
-                dst.put_u16(metadata.name.len().try_into().unwrap()); // DeviceNameLength
-                dst.put(metadata.name.as_bytes()); // DeviceName
+                dst.put_u16(name.len().try_into().unwrap()); // DeviceNameLength
+                dst.put(name); // DeviceName
                 dst.put(metadata.id.as_bytes()); // DeviceId
-                let addr = metadata.addr.to_string(); // DeviceAddressLength
-                dst.put_u16(u16::try_from(addr.len()).unwrap()); // DeviceAddress
-                dst.put(addr.as_bytes());
+                let addr_str = metadata.addr.to_string();
+                let addr = addr_str.as_bytes();
+                dst.put_u16(addr.len().try_into().unwrap()); // DeviceAddressLength
+                dst.put(addr); // DeviceAddress
             }
         }
         Ok(())
@@ -194,26 +234,12 @@ impl Decoder for HeaderCodec {
             return Ok(None);
         }
 
-        //let mut peek = Cursor::new(&src[..5]);
-
-        // if !src.starts_with(&SIGNATURE) {
-        //     return Err(HeaderError::NotAHeader);
-        // }
-
-        // let message_length = peek.get_u16();
-
         let Some(signature_raw) = src.get(0..2) else {
             return Ok(None)
         };
         if signature_raw != SIGNATURE {
             return Err(Self::Error::NotAPacket);
         }
-
-        // if signature_raw != SIGNATURE {
-        //     return Err(HeaderError::NotAHeader);
-        // }
-
-        // let message_length = src.get_u16();
 
         let Some(mut len_bytes) = src.get(2..4) else {
             return Ok(None);
@@ -246,44 +272,6 @@ impl Encoder<Header> for HeaderCodec {
 
         Ok(())
     }
-}
-
-pub struct Header {
-    pub length: u16,
-    pub message_type: MessageType,
-}
-
-impl Header {
-    pub fn new(typ: MessageType, item: &impl Frame) -> Header {
-        let mut header = Header {
-            message_type: typ,
-            length: item.len(),
-        };
-        header.length += header.len();
-        header
-    }
-}
-
-impl Frame for Header {
-    fn len(&self) -> u16 {
-        2 + 2 + 1 // dont forget signature ;)
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, TryFromPrimitive, IntoPrimitive)]
-#[repr(u8)]
-pub enum MessageType {
-    // None = 0,
-    Discovery = 1,
-    Connect = 2,
-    // Control = 3,
-    // Session = 4,
-    // Ack = 5
-}
-
-/// Each frame needs to know it's length before sending
-pub trait Frame {
-    fn len(&self) -> u16;
 }
 
 #[cfg(test)]
@@ -328,11 +316,12 @@ mod tests {
         src.put_u16(6); // length
         src.put_u8(1); // type
         src.put_u8(0); // discovery type
+        src.put_u32(200); // dedup id
         let mut result = consume(&mut decoder, &mut src);
 
         assert_eq!(0, src.len());
         assert_eq!(1, result.len());
-        let Some(Some(DiscoveryEvent::PresenceRequest)) = result.pop() else {
+        let Some(Some(DiscoveryEvent::PresenceRequest(200))) = result.pop() else {
             panic!("invalid frame");
         };
     }
@@ -377,7 +366,7 @@ mod tests {
         let mut encoder = DiscoveryCodec;
         let mut dst = BytesMut::new();
 
-        let item = DiscoveryEvent::PresenceRequest;
+        let item = DiscoveryEvent::PresenceRequest(200);
 
         encoder.encode(item, &mut dst).expect("Error Encoding");
         // assert_eq!(dst, BytesMut::from(&hex!("")[..]))
@@ -385,7 +374,7 @@ mod tests {
         let mut result = consume(&mut encoder, &mut dst);
         assert_eq!(0, dst.len());
         assert_eq!(1, result.len());
-        let Some(Some(DiscoveryEvent::PresenceRequest)) = result.pop() else {
+        let Some(Some(DiscoveryEvent::PresenceRequest(200))) = result.pop() else {
             panic!("invalid frame");
         };
     }
