@@ -2,9 +2,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
-    #[error("A configuration file error occured: {0}")]
-    Conf(#[from] ConfError),
-
+    // #[error("A configuration file error occured: {0}")]
+    // Conf(#[from] ConfError),
     #[error("An I/O error occured: {0}")]
     IO(#[from] std::io::Error),
 
@@ -17,7 +16,7 @@ pub enum CoreError {
     P2pHandshake(#[from] p2p::err::ConnError),
 
     #[error("A json serialization error occured: {0}")]
-    Serde(#[from] serde_json::Error),
+    Json(#[from] serde_json::Error),
 
     #[error("A protocol error occured: {0}")]
     Protocol(String),
@@ -30,17 +29,23 @@ pub enum CoreError {
 
     #[error("A utf8 error occured: {0}")]
     Uft8(#[from] std::string::FromUtf8Error),
+
+    #[error("A secret store error occured: {0}")]
+    Secret(String),
+
+    #[error("A base64 error occured: {0}")]
+    Base64(String),
 }
 
-#[derive(Debug, Error)]
-pub enum ConfError {
-    #[error("The I/O operation failed: {0}")]
-    IO(#[from] std::io::Error),
-    #[error("Failed to read/write json: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("Failed to access secret: {0}")]
-    Secret(#[from] keyring::error::Error),
-}
+// #[derive(Debug, Error)]
+// pub enum ConfError {
+//     #[error("The I/O operation failed: {0}")]
+//     IO(#[from] std::io::Error),
+//     #[error("Failed to read/write json: {0}")]
+//     Json(#[from] serde_json::Error),
+//     #[error("Failed to access secret: {0}")]
+//     Secret(#[from] keyring::error::Error),
+// }
 
 /// An error originating from parsing protocol packets
 #[derive(Error, Debug)]

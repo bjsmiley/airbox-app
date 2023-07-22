@@ -2,7 +2,7 @@
 members = [
     "lib/p2p",
     "lib/core",
-    # "app/desktop/ffi",
+    "app/ffi",
     "tools/udpm"
 ]
 

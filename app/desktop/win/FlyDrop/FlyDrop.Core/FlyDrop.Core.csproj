@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net7.0</TargetFramework>
@@ -6,5 +6,24 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+	<Target Name="Generate_fdcore_dll" BeforeTargets="CoreCompile" DependsOnTargets="PrepareForBuild">
+		<!-- <Exec Command="cargo build ..out-dir $(OutDir)"/> -->
+		<Exec Command="cargo build" />
+	</Target>
+	
+<!--	<ItemGroup> -->
+<!--		<None Include="$(ProjectDir)..\..\..\..\..\..\..\..\target\debug\**" CopyToOutputDirectory="Always" /> -->
+<!--	</ItemGroup>-->
+
+	<ItemGroup>
+		<Content Include="$(ProjectDir)..\..\..\..\..\target\debug\ffi.*">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Models\Events\" />
+	</ItemGroup>
 
 </Project>

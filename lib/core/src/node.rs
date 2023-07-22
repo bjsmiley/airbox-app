@@ -2,6 +2,7 @@ use std::net::{SocketAddr, SocketAddrV4};
 use std::path::PathBuf;
 
 use crate::proto::{Ctl, CtlRequest, CtlResponse, Session};
+use crate::store::Store;
 use crate::{
     api,
     api::{cmd, query},
@@ -12,7 +13,7 @@ use crate::{
 };
 
 use p2p::pairing::PairingAuthenticator;
-use p2p::peer::{PeerCandidate, PeerId, PeerMetadata};
+use p2p::peer::{Identity, PeerCandidate, PeerId, PeerMetadata};
 use p2p::{
     discovery,
     event::P2pEvent,
@@ -28,7 +29,13 @@ pub struct Node {
     conf: conf::NodeConfig,
 
     /// the node configuration storage
-    store: conf::NodeConfigStore,
+    store: Store<conf::NodeConfig>,
+
+    // the node identity storage
+    identity: Store<Identity>,
+
+    /// the node secret storage
+    secrets: secret::SecretStore,
 
     /// the p2p manager
     p2p: std::sync::Arc<P2pManager>,
@@ -67,8 +74,22 @@ pub struct Node {
 impl Node {
     pub async fn init(dir: PathBuf) -> Result<(Self, mpsc::Receiver<CoreEvent>), err::CoreError> {
         // build node config from disk or create
-        let store: conf::NodeConfigStore = dir.into();
-        let conf = store.get()?;
+        let mut conf_file = dir.clone();
+        conf_file.push("settings.json");
+        let store: Store<conf::NodeConfig> = conf_file.into();
+        let mut conf = store.put()?;
+
+        // build node identity from disk or create
+        let mut id_file = dir;
+        id_file.push("identity.json");
+        let identity: Store<Identity> = id_file.into();
+        let id = identity.put()?;
+        let (cert, _) = id.into_rustls();
+        conf.id = PeerId::from_cert(&cert);
+        store.set(&conf)?;
+
+        // build the secret store
+        let secrets = secret::SecretStore::new(String::from("local")); // TODO: nanoid id random
 
         // build lan
         let mut lan = LanManager::new()?;
@@ -85,7 +106,7 @@ impl Node {
         let (p2p, p2p_events) = P2pManager::new(p2p_conf).await?;
 
         // append known peers
-        for p in secret::to_known(&conf.known_peers) {
+        for p in secrets.to_known(&conf.known_peers) {
             p2p.add_known_peer(p);
         }
 
@@ -94,7 +115,9 @@ impl Node {
         let node = Self {
             conf,
             store,
+            identity,
             p2p,
+            secrets,
             // lan,
             state: State::default(),
             query: mpsc::unbounded_channel(),
@@ -200,7 +223,7 @@ impl Node {
                 }
                 self.state.discovery_ct = None;
             }
-            cmd::Request::SendPeer(id, request) => {
+            cmd::Request::SendPeer { peer: id, req } => {
                 // Current state: "similar" to HTTP 1 - 1 request per connection
                 // TODO: save and reuse connections (HTTP 1.1)
                 // TODO: support more complex flows, timeouts, etc.
@@ -210,11 +233,11 @@ impl Node {
                 self.state.session_id += 1; // update the session id
                 let session = Session {
                     id: self.state.session_id,
-                    ctl: Ctl::Request(request.into()),
+                    ctl: Ctl::Request(req.into()),
                 };
                 tokio::spawn(crate::peer::client_handler(peer, session, tx));
             }
-            cmd::Request::SetConfig(mut new) => {
+            cmd::Request::SetConf(mut new) => {
                 new.id = self.conf.id.clone();
                 self.store.set(&new)?;
                 self.conf = new;
@@ -226,11 +249,11 @@ impl Node {
                 self.store.set(&self.conf)?; // TODO: save new secret to keyring
                 self.p2p.add_known_peer(known);
             }
-            cmd::Request::Ack(_, session, ack) => {
-                if let Some(s) = self.state.sessions.remove(&session) {
+            cmd::Request::Ack { sid, ack, .. } => {
+                if let Some(s) = self.state.sessions.remove(&sid) {
                     _ = s
                         .send(Session {
-                            id: session,
+                            id: sid,
                             ctl: Ctl::Response(ack.into()),
                         })
                         .await;

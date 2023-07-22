@@ -1,6 +1,6 @@
 ﻿namespace FlyDrop.Core
 {
-    partial struct Buffer
+/*    partial struct Buffer
     {
         public unsafe Span<byte> AsSpan()
         {
@@ -11,5 +11,5 @@
         {
             return MemoryMarshal.CreateSpan(ref Unsafe.AsRef<T>(ptr), len / Unsafe.SizeOf<T>());
         }
-    }
+    }*/
 }

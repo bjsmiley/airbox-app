@@ -23,7 +23,7 @@ if-watch = { version = "3.0.1", features = ["tokio"] }
 futures = { workspace = true }
 open = "4.1.0"
 bytes = { workspace = true}
-# base64 = "0.21.2"
+base64 = "0.21.2"
 rand = "0.8.5"
 # image = "0.23.14"
 

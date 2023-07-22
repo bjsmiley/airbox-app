@@ -7,6 +7,7 @@ mod peer;
 pub mod plat;
 pub mod secret;
 mod state;
+mod store;
 pub use p2p;
 mod disc;
 mod proto;

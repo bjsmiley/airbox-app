@@ -2,5 +2,6 @@
     "rust-analyzer.linkedProjects": [
         ".\\lib\\p2p\\Cargo.toml",
         ".\\lib\\core\\Cargo.toml",
+        ".\\app\\ffi\\Cargo.toml"
     ]
 }

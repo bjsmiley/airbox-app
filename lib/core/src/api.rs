@@ -16,7 +16,7 @@ impl From<cmd::Response> for EmptyApiResult {
     fn from(error: cmd::Response) -> Self {
         match error {
             cmd::Response::Ok => Ok(()),
-            cmd::Response::Err => Err(()),
+            // cmd::Response::Err => Err(()),
         }
     }
 }
@@ -33,7 +33,7 @@ pub struct Api<D, R> {
 }
 
 impl<D, R> Api<D, R> {
-    async fn send(&self, req: D) -> Result<R, err::CoreError> {
+    pub async fn send(&self, req: D) -> Result<R, err::CoreError> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let payload = Msg { req, res: tx };
 
@@ -89,7 +89,7 @@ impl CmdApi {
     }
 
     pub async fn set_config(&self, config: crate::conf::NodeConfig) -> EmptyApiResult {
-        self.send2(cmd::Request::SetConfig(config)).await?.into()
+        self.send2(cmd::Request::SetConf(config)).await?.into()
     }
 
     pub async fn pair(&self, payload: crate::node::QrPayload) -> EmptyApiResult {
@@ -97,19 +97,29 @@ impl CmdApi {
     }
 
     pub async fn send_peer(&self, id: PeerId, req: PeerRequest) -> EmptyApiResult {
-        self.send2(cmd::Request::SendPeer(id, req)).await?.into()
+        self.send2(cmd::Request::SendPeer { peer: id, req })
+            .await?
+            .into()
     }
 
     pub async fn ctl_cancel(&self, id: PeerId, session: u64) -> EmptyApiResult {
-        self.send2(cmd::Request::Ack(id, session, cmd::Ack::Cancelled))
-            .await?
-            .into()
+        self.send2(cmd::Request::Ack {
+            peer: id,
+            sid: session,
+            ack: cmd::Ack::Cancelled,
+        })
+        .await?
+        .into()
     }
 
     pub async fn ctl_accept(&self, id: PeerId, session: u64) -> EmptyApiResult {
-        self.send2(cmd::Request::Ack(id, session, cmd::Ack::Accepted))
-            .await?
-            .into()
+        self.send2(cmd::Request::Ack {
+            peer: id,
+            sid: session,
+            ack: cmd::Ack::Accepted,
+        })
+        .await?
+        .into()
     }
 }
 
@@ -122,18 +132,26 @@ pub mod cmd {
     // commands and queries sent from the application layer to core
     #[derive(Debug, Serialize, Deserialize)]
     pub enum Request {
-        SetConfig(crate::conf::NodeConfig),
+        SetConf(crate::conf::NodeConfig),
         StartDiscovery,
         StopDiscovery,
-        SendPeer(peer::PeerId, PeerRequest),
+        SendPeer {
+            peer: peer::PeerId,
+            req: PeerRequest,
+        },
         // qr code json payload
         Pair(crate::node::QrPayload),
-        Ack(peer::PeerId, u64, Ack),
+        Ack {
+            peer: peer::PeerId,
+            sid: u64,
+            ack: Ack,
+        },
     }
 
     #[derive(Debug, Serialize, Deserialize)]
     pub enum Ack {
         Accepted,
+        // AwaitingUser,
         Cancelled,
         // TimedOut
     }
@@ -141,7 +159,7 @@ pub mod cmd {
     #[derive(Debug, Serialize, Deserialize)]
     pub enum Response {
         Ok,
-        Err,
+        // Err,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -161,6 +179,7 @@ pub mod cmd {
         fn into(self) -> proto::CtlResponse {
             match self {
                 Ack::Accepted => proto::CtlResponse::Success,
+                // Ack::AwaitingUser => proto::CtlResponse::Waiting,
                 Ack::Cancelled => proto::CtlResponse::Cancel,
             }
         }
@@ -184,6 +203,26 @@ pub mod query {
         Conf(conf::NodeConfig),
         DiscoveredPeers(Vec<p2p::peer::PeerMetadata>),
         SharableQrCode(crate::node::QrPayload),
-        Err,
+        // Err,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use p2p::peer::PeerId;
+
+    use crate::api::{cmd, query};
+
+    #[test]
+    pub fn json() {
+        println!(
+            "{}",
+            serde_json::to_string(&cmd::Request::Ack {
+                peer: PeerId::default(),
+                sid: 1,
+                ack: cmd::Ack::Accepted
+            })
+            .unwrap()
+        );
     }
 }

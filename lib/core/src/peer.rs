@@ -5,9 +5,31 @@ use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{debug, error};
 
 use crate::{
+    err,
     node::InternalEvent,
     proto::{Session, SessionCodec},
+    store,
 };
+
+impl store::Persistable for p2p::peer::Identity {
+    type Error = err::CoreError;
+
+    fn read<R>(r: R) -> Result<Self, Self::Error>
+    where
+        R: std::io::Read,
+    {
+        Ok(serde_json::from_reader(r)?)
+    }
+
+    fn write<W>(&self, w: &mut W) -> Result<(), Self::Error>
+    where
+        W: std::io::Write,
+    {
+        let json = serde_json::to_string(self)?;
+        w.write_all(json.as_bytes())?;
+        Ok(())
+    }
+}
 
 pub(crate) async fn client_handler(peer: Peer, req: Session, tx: UnboundedSender<InternalEvent>) {
     let (r, w) = tokio::io::split(peer.conn);
