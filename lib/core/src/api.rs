@@ -207,20 +207,63 @@ pub mod query {
     }
 }
 
+pub mod event {
+    use p2p::peer::{PeerId, PeerMetadata};
+    use serde::{Deserialize, Serialize};
+
+    // events to be subscribed to by the application ui
+    #[derive(Debug, Serialize, Deserialize)]
+    pub enum CoreEvent {
+        Discovered(PeerMetadata),
+        // AskLaunchUri(PeerId, u64, String),
+        // LaunchUri { peer: PeerId, sid: u64, uri: String },
+        AppControl {
+            peer: PeerId,
+            sid: u64,
+            ctl: ControlMessage,
+        },
+        AppControlUpdate {
+            peer: PeerId,
+            status: ControlStatus,
+        },
+        // PeerCtlWaiting(PeerId),
+        // PeerCtlSuccess(PeerId),
+        // PeerCtlCancel(PeerId),
+        // PeerCtlFailed(PeerId),
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub enum ControlMessage {
+        LaunchUri { uri: String, ask: bool },
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub enum ControlStatus {
+        Waiting,
+        Success,
+        Cancelled,
+        Failed,
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use p2p::peer::PeerId;
+    use p2p::peer::{PeerId, PeerMetadata};
 
-    use crate::api::{cmd, query};
+    use crate::api::{
+        cmd,
+        event::{self, ControlStatus},
+        query,
+    };
 
     #[test]
     pub fn json() {
         println!(
             "{}",
-            serde_json::to_string(&cmd::Request::Ack {
+            // serde_json::to_string(&event::CoreEvent::Discovered(PeerMetadata::default())).unwrap()
+            serde_json::to_string(&event::CoreEvent::AppControlUpdate {
                 peer: PeerId::default(),
-                sid: 1,
-                ack: cmd::Ack::Accepted
+                status: ControlStatus::Success
             })
             .unwrap()
         );

@@ -1,6 +1,7 @@
 ﻿using FlyDrop.Core.Internal;
 using FlyDrop.Core.Models.Commands;
 using FlyDrop.Core.Models.Common;
+using FlyDrop.Core.Models.Events;
 using FlyDrop.Core.Models.Queries;
 using System;
 using System.Collections.Generic;
@@ -14,6 +15,8 @@ using System.Threading.Tasks;
 
 namespace FlyDrop.Core
 {
+    public delegate void EventCallback(ApiEvent ev);
+
 
     public class Api : IDisposable
     {
@@ -27,12 +30,28 @@ namespace FlyDrop.Core
             _options.PropertyNamingPolicy = new JsonSnakeCaseLowerNamingPolicy();
         }
 
-        public static async Task<Api> CreateAsync(string directory, CallbackCnt eventCallback, JsonSerializerOptions? options = null)
+        public static async Task<Api> CreateAsync(string directory, EventCallback eventCallback, JsonSerializerOptions? options = null)
         {
             var api = new Api(options);
             var channel = Channel.CreateBounded<object>(1);
 
-            Native.Initialize(directory,eventCallback, () =>
+            Native.Initialize(directory,(ev) =>
+            {
+                Console.WriteLine(ev);
+                try
+                {
+                    var e = JsonSerializer.Deserialize<ApiEvent>(ev, api._options);
+                    if(e != null)
+                    {
+                        _ = Task.Run(() => { eventCallback(e); });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("Failed to read event from core: {0}", ev);
+                    Console.Error.WriteLine("{0}", ex);
+                }
+            }, () =>
             {
                 channel.Writer.WriteAsync(new object());
             });
@@ -60,15 +79,13 @@ namespace FlyDrop.Core
             {
                 try
                 {
-                    Console.WriteLine(res);
                     var response = JsonSerializer.Deserialize<ApiResponse<TRes>>(res, _options);
                     channel.Writer.WriteAsync(response);
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine("Failed to read query response from core: {}", res);
+                    Console.Error.WriteLine("Failed to read query response from core: {0}", res);
                     channel.Writer.Complete(ex);
-
                 }
             });
             return channel.Reader.ReadAsync();
@@ -83,13 +100,12 @@ namespace FlyDrop.Core
             {
                 try
                 {
-                    Console.WriteLine(res);
                     var response = JsonSerializer.Deserialize<ApiResponse<TRes>>(res, _options);
                     channel.Writer.WriteAsync(response);
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine("Failed to read cmd response from core: {}", res);
+                    Console.Error.WriteLine("Failed to read cmd response from core: {0}", res);
                     channel.Writer.Complete(ex);
 
                 }

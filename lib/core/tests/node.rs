@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use fdcore::{
-    api::cmd::PeerRequest,
-    node::{CoreEvent, Node},
+    api::{cmd::PeerRequest, event::{CoreEvent, ControlStatus, ControlMessage}},
+    node::{Node},
 };
+use tokio::task::Id;
 
 // #[tokio::test]
 // pub async fn node_discovery_test() -> Result<(), Box<dyn std::error::Error>> {
@@ -109,11 +110,11 @@ pub async fn nodes_pair_send_openuri() -> Result<(), Box<dyn std::error::Error>>
     _ = nae.recv().await; // skip discovery message
     _ = nbe.recv().await; // skip discovery message
 
-    let Some(CoreEvent::PeerCtlWaiting(id)) = nae.recv().await else {
+    let Some(CoreEvent::AppControlUpdate { peer: id, status: ControlStatus::Waiting }) = nae.recv().await else { 
         panic!("The wrong response was received")
     };
     assert_eq!(id, confb.id);
-    let Some(CoreEvent::AskLaunchUri(id, s, uri)) = nbe.recv().await else {
+    let Some(CoreEvent::AppControl { peer: id, ctl: ControlMessage::LaunchUri { uri, ask: true }, sid: s }) = nbe.recv().await else {
         panic!("The wrong response was received")
     };
     assert_eq!(id, confa.id);
@@ -122,7 +123,7 @@ pub async fn nodes_pair_send_openuri() -> Result<(), Box<dyn std::error::Error>>
         uri
     );
     nbcmd.ctl_accept(id, s).await.unwrap();
-    let Some(CoreEvent::PeerCtlSuccess(id)) = nae.recv().await else {
+    let Some(CoreEvent::AppControlUpdate { peer: id, status: ControlStatus::Success }) = nae.recv().await else {
         panic!("The wrong response was received")
     };
     assert_eq!(id, confb.id);

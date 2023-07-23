@@ -1,17 +1,13 @@
 use fdcore::api::{self, CmdApi, QueryApi};
-use fdcore::node::{CoreEvent, Node};
+use fdcore::node::Node;
 use std::collections::VecDeque;
 use std::ffi::{CStr, CString};
 use std::io::BufReader;
 use std::os::raw::c_char;
-use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use once_cell::sync::{Lazy, OnceCell};
-use tokio::{
-    runtime::Runtime,
-    sync::{mpsc, Mutex},
-};
+use tokio::runtime::Runtime;
 
 // extern "C" {
 //     fn core_ready();
@@ -114,6 +110,15 @@ pub unsafe extern "C" fn init(
             let (mut node, mut rx) = Node::init(std::path::PathBuf::from(dir)).await.unwrap();
 
             RUNTIME.spawn(async move {
+                // tokio::time::sleep(std::time::Duration::from_micros(100)).await;
+                // let e = CoreEvent::AppControlUpdate {
+                //     peer: PeerId::default(),
+                //     status: api::event::ControlStatus::Success,
+                // };
+                // let json = serde_json::to_string(&e).unwrap();
+                // let utf8json = CString::new(json.as_bytes()).unwrap();
+                // on_event(utf8json.as_ptr());
+
                 while let Some(e) = rx.recv().await {
                     let json = serde_json::to_string(&e).unwrap();
                     let utf8json = CString::new(json.as_bytes()).unwrap();

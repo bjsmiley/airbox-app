@@ -8,7 +8,13 @@ Console.WriteLine("Hello, World!");
 */
 
 
-var api = await Api.CreateAsync(Path.GetTempPath(), (x) => Console.WriteLine(x));
+var api = await Api.CreateAsync(Path.GetTempPath(), (x) => {
+    Console.WriteLine(x);
+});
+
+await Task.Delay(1000);
+
+
 // var res = await api.QueryAsync<GetConfigurationRequest, GetConfigurationResponse>(new GetConfigurationRequest());
 
 /*
@@ -24,6 +30,7 @@ var res = await api.CommandAsync<SendPeerRequest<LaunchUri>, CommandResponse>(ne
     }
 });
 */
+/*
 var res = await api.CommandAsync<AckRequest, CommandResponse>(new AckRequest
 {
     Ack = new AckContent
@@ -34,7 +41,7 @@ var res = await api.CommandAsync<AckRequest, CommandResponse>(new AckRequest
     }
 });
 
-Console.WriteLine(res.Error);
+Console.WriteLine(res.Error);*/
 
 
 

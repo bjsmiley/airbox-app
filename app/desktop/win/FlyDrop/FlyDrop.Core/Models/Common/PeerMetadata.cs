@@ -1,4 +1,5 @@
-﻿using System;
+﻿using FlyDrop.Core.Internal;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 
 namespace FlyDrop.Core.Models.Common
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum DeviceType : ushort
     {
         Unknown = 0,
@@ -31,6 +33,7 @@ namespace FlyDrop.Core.Models.Common
         [JsonPropertyName("typ")]
         public DeviceType Type { get; set; }
         [JsonPropertyName("addr")]
+        [JsonConverter(typeof(IPEndPointJsonConverter))]
         public IPEndPoint Address { get; set; }
     }
 }

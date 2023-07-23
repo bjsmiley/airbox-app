@@ -1,6 +1,7 @@
 use std::net::{SocketAddr, SocketAddrV4};
 use std::path::PathBuf;
 
+use crate::api::event::{ControlMessage, ControlStatus, CoreEvent};
 use crate::proto::{Ctl, CtlRequest, CtlResponse, Session};
 use crate::store::Store;
 use crate::{
@@ -45,6 +46,10 @@ pub struct Node {
 
     /// in-memory state of the node
     state: State,
+
+    // TODO: Graceful shutdown
+    /// Node shutdown signal
+    shutdown: CancellationToken,
 
     /// a channel for the ui to send queries w/ returnable values
     query: (
@@ -118,6 +123,7 @@ impl Node {
             identity,
             p2p,
             secrets,
+            shutdown: CancellationToken::new(),
             // lan,
             state: State::default(),
             query: mpsc::unbounded_channel(),
@@ -131,7 +137,7 @@ impl Node {
     }
 
     /// called by application on a dedicated thread
-    pub async fn start(&mut self) {
+    pub async fn start(mut self) {
         // TODO: start p2p event loop here?
         loop {
             tokio::select! {
@@ -270,19 +276,31 @@ impl Node {
                 self.state.sessions.insert(body.id, tx.clone());
                 match body.ctl {
                     Ctl::Request(CtlRequest::LaunchUri(uri)) => {
-                        let msg = match self.conf.auto_accept {
-                            true => (
-                                CoreEvent::LaunchUri(meta.id, body.id, uri),
-                                CtlResponse::Success,
-                            ),
-                            false => (
-                                CoreEvent::AskLaunchUri(meta.id, body.id, uri),
-                                CtlResponse::Waiting,
-                            ),
+                        let response = match self.conf.auto_accept {
+                            true => CtlResponse::Success,
+                            false => CtlResponse::Waiting,
                         };
-                        let res = match self.events.send(msg.0).await {
+                        let event = CoreEvent::AppControl {
+                            peer: meta.id,
+                            sid: body.id,
+                            ctl: ControlMessage::LaunchUri {
+                                uri,
+                                ask: !self.conf.auto_accept,
+                            },
+                        };
+                        // let msg = match self.conf.auto_accept {
+                        //     true => (
+                        //         event::CoreEvent::LaunchUri(meta.id, body.id, uri),
+                        //         CtlResponse::Success,
+                        //     ),
+                        //     false => (
+                        //         CoreEvent::AskLaunchUri(meta.id, body.id, uri),
+                        //         CtlResponse::Waiting,
+                        //     ),
+                        // };
+                        let res = match self.events.send(event).await {
                             Err(_) => CtlResponse::Error(crate::proto::CTL_UNKNOWN_ERR),
-                            Ok(()) => msg.1,
+                            Ok(()) => response,
                         };
                         _ = tx
                             .send(Session {
@@ -295,24 +313,27 @@ impl Node {
                 }
             }
             InternalEvent::SessionResult { id, body } => match body.ctl {
-                Ctl::Response(status) => {
-                    let msg = match status {
+                Ctl::Response(res) => {
+                    let status = match res {
                         CtlResponse::Error(code) => {
                             error!("Failed to perform app control: {}", code);
                             self.state.sessions.get(&body.id); // drop
-                            CoreEvent::PeerCtlFailed(id)
+                            ControlStatus::Failed
                         }
                         CtlResponse::Success => {
                             self.state.sessions.get(&body.id); // drop
-                            CoreEvent::PeerCtlSuccess(id)
+                            ControlStatus::Success
                         }
                         CtlResponse::Cancel => {
                             self.state.sessions.get(&body.id); // drop
-                            CoreEvent::PeerCtlCancel(id)
+                            ControlStatus::Cancelled
                         }
-                        CtlResponse::Waiting => CoreEvent::PeerCtlWaiting(id),
+                        CtlResponse::Waiting => ControlStatus::Waiting,
                     };
-                    _ = self.events.send(msg).await;
+                    _ = self
+                        .events
+                        .send(CoreEvent::AppControlUpdate { peer: id, status })
+                        .await;
                 }
                 x => error!("Unhandled app ctl response {:?}", x),
             },
@@ -338,18 +359,6 @@ impl Node {
 
         Ok(())
     }
-}
-
-// events to be subscribed to by the application ui
-#[derive(Debug, Serialize, Deserialize)]
-pub enum CoreEvent {
-    Discovered(PeerMetadata),
-    AskLaunchUri(PeerId, u64, String),
-    LaunchUri(PeerId, u64, String),
-    PeerCtlWaiting(PeerId),
-    PeerCtlSuccess(PeerId),
-    PeerCtlCancel(PeerId),
-    PeerCtlFailed(PeerId),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
