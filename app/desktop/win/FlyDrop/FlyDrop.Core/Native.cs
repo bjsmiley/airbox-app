@@ -15,7 +15,7 @@ namespace FlyDrop.Core
         const string __DllName = "ffi";
 
         [DllImport(__DllName, EntryPoint = "init", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        public static extern void Initialize(string data_dir, CallbackCnt on_event, Callback on_ready);
+        public static extern void Initialize(string data_dir, CallbackCnt on_event, CallbackCnt on_ready);
 
         /*        public static extern void Initialize(string data_dir, delegate* unmanaged[Cdecl]<string> on_event, delegate* unmanaged[Cdecl]<void> on_ready);
         */

@@ -12,10 +12,10 @@ var api = await Api.CreateAsync(Path.GetTempPath(), (x) => {
     Console.WriteLine(x);
 });
 
-await Task.Delay(1000);
 
 
-// var res = await api.QueryAsync<GetConfigurationRequest, GetConfigurationResponse>(new GetConfigurationRequest());
+var res = await api.QueryAsync<GetConfigurationRequest, GetConfigurationResponse>(new GetConfigurationRequest());
+Console.WriteLine(res);
 
 /*
 var res = await api.CommandAsync<SendPeerRequest<LaunchUri>, CommandResponse>(new SendPeerRequest<LaunchUri>

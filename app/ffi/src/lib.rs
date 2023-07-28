@@ -97,17 +97,34 @@ use tokio::runtime::Runtime;
 pub unsafe extern "C" fn init(
     data_dir: *const c_char,
     on_event: extern "C" fn(*const c_char),
-    on_ready: extern "C" fn(),
+    on_complete: extern "C" fn(*const c_char),
 ) {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .with_thread_ids(true)
         .init();
+    println!("hello println");
+    tracing::info!("hello tracing::info");
 
+    // on_complete(CString::new("ok?".to_string()).unwrap().as_ptr());
+    // C:\Users\bryan\AppData\Local\FlyDrop.App\ApplicationData
+    // An I/O error occured: strings passed to WinAPI cannot contain NULs
     if EVENT_LOOP.get().is_none() {
+        // let Ok(d) = CStr::from_ptr(data_dir).to_str() else {
+        //     on_complete(CString::new("failed here".to_string()).unwrap().as_ptr());
+        //     return;
+        // };
+        // let d = String::from("C:\\Users\\bryan\\AppData\\Local\\FlyDrop.App/ApplicationData");
         let dir = CStr::from_ptr(data_dir).to_str().unwrap().to_string();
+
         RUNTIME.spawn(async move {
-            let (mut node, mut rx) = Node::init(std::path::PathBuf::from(dir)).await.unwrap();
+            let (node, mut rx) = Node::init(std::path::PathBuf::from(dir))
+                .await
+                .map_err(|e| {
+                    on_complete(CString::new(e.to_string()).unwrap().as_ptr());
+                    e
+                })
+                .unwrap();
 
             RUNTIME.spawn(async move {
                 // tokio::time::sleep(std::time::Duration::from_micros(100)).await;
@@ -128,7 +145,7 @@ pub unsafe extern "C" fn init(
 
             _ = API.set((node.get_query_api(), node.get_cmd_api()));
             _ = EVENT_LOOP.set(RUNTIME.spawn(async move { node.start().await }));
-            on_ready();
+            on_complete(CString::new("Initialized".to_string()).unwrap().as_ptr());
         });
     }
 }

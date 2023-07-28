@@ -1,6 +1,4 @@
-<!-- Copyright (c) Microsoft Corporation and Contributors. -->
-<!-- Licensed under the MIT License. -->
-
+<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="FlyDrop.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -10,7 +8,27 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+    <!--<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
         <Button x:Name="myButton" Click="myButton_Click">Click Me</Button>
-    </StackPanel>
+    </StackPanel>-->
+    <NavigationView x:Name="MainNav" ItemInvoked="MainNav_ItemInvoked">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="Devices" Tag="FlyDrop.Pages.Devices">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE703;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Share" Tag="Pages.Share">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xE72D;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="Connect" Tag="Pages.Connect">
+                <NavigationViewItem.Icon>
+                    <FontIcon Glyph="&#xED5C;" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+        </NavigationView.MenuItems>
+        <Frame x:Name="ContentFrame"/>
+    </NavigationView>
 </Window>

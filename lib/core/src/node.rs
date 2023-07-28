@@ -79,6 +79,7 @@ pub struct Node {
 impl Node {
     pub async fn init(dir: PathBuf) -> Result<(Self, mpsc::Receiver<CoreEvent>), err::CoreError> {
         // build node config from disk or create
+        std::fs::create_dir_all(&dir)?;
         let mut conf_file = dir.clone();
         conf_file.push("settings.json");
         let store: Store<conf::NodeConfig> = conf_file.into();

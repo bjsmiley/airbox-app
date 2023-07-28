@@ -20,14 +20,54 @@ namespace FlyDrop.Core
 
     public class Api : IDisposable
     {
+        public bool IsInitalized { get; private set; }
         private readonly Mutex _mutex;
         private readonly JsonSerializerOptions _options;
-        Api(JsonSerializerOptions? options = null)
+       
+
+        public Api() : this(null)
+        {
+     
+        }
+
+        public Api(JsonSerializerOptions? options = null)
         {
             var id = Process.GetCurrentProcess().Id;
             _mutex = new Mutex(true, $"flydrop-{id}");
             _options = options ?? new JsonSerializerOptions(JsonSerializerOptions.Default);
             _options.PropertyNamingPolicy = new JsonSnakeCaseLowerNamingPolicy();
+            IsInitalized = false;
+        }
+
+        public async Task<string> InitializeAsync(string directory, Func<ApiEvent, Task> eventCallback)
+        {
+            var channel = Channel.CreateBounded<string>(1);
+
+            Native.Initialize(directory, (ev) =>
+            {
+                try
+                {
+                    var e = JsonSerializer.Deserialize<ApiEvent>(ev, _options);
+                    if (e != null)
+                    {
+                        //  _ = Task.Run(() => { eventCallback(e); });
+                        _ = eventCallback(e);
+
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("Failed to read event from core: {0}", ev);
+                    Console.Error.WriteLine("{0}", ex);
+                }
+            }, (res) =>
+            {
+                channel.Writer.WriteAsync(res);
+            });
+
+            var r = await channel.Reader.ReadAsync();
+            IsInitalized = true;
+            return r;
         }
 
         public static async Task<Api> CreateAsync(string directory, EventCallback eventCallback, JsonSerializerOptions? options = null)
@@ -37,7 +77,7 @@ namespace FlyDrop.Core
 
             Native.Initialize(directory,(ev) =>
             {
-                Console.WriteLine(ev);
+                // Console.WriteLine(ev);
                 try
                 {
                     var e = JsonSerializer.Deserialize<ApiEvent>(ev, api._options);
@@ -51,12 +91,53 @@ namespace FlyDrop.Core
                     Console.Error.WriteLine("Failed to read event from core: {0}", ev);
                     Console.Error.WriteLine("{0}", ex);
                 }
-            }, () =>
+            }, (_) =>
             {
                 channel.Writer.WriteAsync(new object());
             });
 
             await channel.Reader.ReadAsync();
+            api.IsInitalized = true;
+            return api;
+
+        }
+
+        public static Api Create(string directory, EventCallback eventCallback, JsonSerializerOptions? options = null)
+        {
+            var api = new Api(options);
+            var channel = new SemaphoreSlim(0, 1);
+            try
+            {
+                Native.Initialize(directory, (ev) =>
+                {
+                    // Console.WriteLine(ev);
+                    try
+                    {
+                        var e = JsonSerializer.Deserialize<ApiEvent>(ev, api._options);
+                        if (e != null)
+                        {
+                            _ = Task.Run(() => { eventCallback(e); });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine("Failed to read event from core: {0}", ev);
+                        Console.Error.WriteLine("{0}", ex);
+                    }
+                }, (_) =>
+                {
+                    Console.WriteLine("cool");
+                    channel.Release();
+                });
+            }
+            catch(Exception e) 
+            {
+                Console.Error.WriteLine("Failed to init Api: {0}", e);
+            }
+            
+
+            channel.Wait();
+            api.IsInitalized = true;
             return api;
 
         }
